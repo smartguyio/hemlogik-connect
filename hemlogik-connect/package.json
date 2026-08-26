@@ -1,0 +1,25 @@
+{
+  "name": "hemlogik-connect-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hemlogik Connect's Home Assistant App agent - opens the secure outbound connection to the Connect Gateway Worker, talks to HA Core via the Supervisor proxy, and supervises cloudflared. Built into the ha-app/hemlogik-connect Docker image (see ../Dockerfile) - not deployed on its own.",
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "dev": "tsx watch src/index.ts",
+    "dev:mock-supervisor": "tsx watch dev/mock-supervisor.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hemlogik/connect-protocol": "*",
+    "ws": "^8.18.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/ws": "^8.5.13",
+    "esbuild": "^0.24.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,5 @@
+#!/usr/bin/with-contenv bashio
+readonly exit_code="${1}"
+if [ "${exit_code}" != "0" ] && [ "${exit_code}" != "256" ]; then
+  bashio::log.warning "cloudflared exited with code ${exit_code} - restarting."
+fi

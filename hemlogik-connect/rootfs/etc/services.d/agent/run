@@ -1,0 +1,12 @@
+#!/usr/bin/with-contenv bashio
+# s6 service - the Hemlogik Connect agent (Node.js, bundled at src/index.ts -> dist/index.js).
+# Supervised independently from cloudflared (see ../cloudflared/run) so each can restart on its
+# own without taking the other down - the agent can be reconnecting to Hemlogik Cloud while
+# cloudflared keeps an already-established tunnel running, and vice versa.
+
+bashio::log.info "Starting Hemlogik Connect agent..."
+export LOG_LEVEL="$(bashio::config 'log_level' 'info')"
+export ENROLLMENT_KEY="$(bashio::config 'enrollment_key' '')"
+export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
+
+exec node /app/dist/index.js

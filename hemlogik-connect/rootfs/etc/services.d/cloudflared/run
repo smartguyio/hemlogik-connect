@@ -1,0 +1,19 @@
+#!/usr/bin/with-contenv bashio
+# s6 service - runs the customer's own Cloudflare Tunnel locally, so the installer never has to
+# install a second, separately-managed container for it (AGENTS spec s25). The tunnel token is
+# scoped to exactly ONE tunnel (this installation's) and is written locally by the agent
+# (cloudflared-supervisor.ts) only after enrollment + provisioning complete - never before, and
+# never anything account-level (that credential lives only in the Connect Gateway Worker).
+
+TOKEN_FILE="/data/tunnel-token"
+
+bashio::log.info "cloudflared: waiting for a remote-access tunnel token..."
+while [ ! -f "${TOKEN_FILE}" ]; do
+  sleep 2
+done
+
+bashio::log.info "cloudflared: token found, starting tunnel."
+# NOTE: a later token rotation (AGENTS spec s25) requires restarting this service to pick up the
+# new token - the agent does this via `s6-svc -r` on the cloudflared service's supervise
+# directory rather than this script watching the file for changes itself.
+exec cloudflared tunnel --no-autoupdate run --token "$(cat "${TOKEN_FILE}")"

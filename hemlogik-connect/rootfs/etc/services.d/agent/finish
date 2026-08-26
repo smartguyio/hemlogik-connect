@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv bashio
+# s6 restarts a service that exits by default (no "down" file present) - this just logs the exit
+# code so a crash is visible in the App's log rather than silently restarting invisibly.
+readonly exit_code="${1}"
+if [ "${exit_code}" != "0" ] && [ "${exit_code}" != "256" ]; then
+  bashio::log.warning "Hemlogik Connect agent exited with code ${exit_code} - restarting."
+fi
