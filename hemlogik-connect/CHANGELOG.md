@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+Broadens call_service control: cover (position slider via set_cover_position), fan (speed via
+set_percentage, oscillate), media_player (select_source), plus two new domains - scene (turn_on)
+and script (turn_on/turn_off). Powers the portal's richer per-domain device controls and the new
+Scenes & Scripts tab. `lock` and `alarm_control_panel` remain permanently excluded.
+
 ## 0.3.1
 
 Fix: the agent's self-reported version (shown in the portal's Diagnostics tab, and sent on every

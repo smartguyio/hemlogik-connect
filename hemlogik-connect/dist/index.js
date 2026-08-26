@@ -18281,19 +18281,37 @@ var CALL_SERVICE_ALLOWED_DOMAINS = [
   "fan",
   "media_player",
   "automation",
-  "update"
+  "update",
+  "scene",
+  "script"
 ];
 var CALL_SERVICE_ALLOWED_SERVICES = {
   light: ["turn_on", "turn_off", "toggle"],
   switch: ["turn_on", "turn_off", "toggle"],
   climate: ["set_temperature", "set_hvac_mode"],
-  cover: ["open_cover", "close_cover", "stop_cover"],
-  fan: ["turn_on", "turn_off", "toggle"],
-  media_player: ["turn_on", "turn_off", "media_play", "media_pause", "media_stop", "volume_set"],
+  // set_cover_position drives the optional position slider - only rendered client-side when the
+  // entity actually reports a current_position attribute, but allowlisted here regardless since
+  // that's a display decision, not a security boundary.
+  cover: ["open_cover", "close_cover", "stop_cover", "set_cover_position"],
+  fan: ["turn_on", "turn_off", "toggle", "set_percentage", "oscillate"],
+  media_player: [
+    "turn_on",
+    "turn_off",
+    "media_play",
+    "media_pause",
+    "media_stop",
+    "volume_set",
+    "select_source"
+  ],
   automation: ["turn_on", "turn_off", "trigger"],
   // "skip" dismisses a pending update without installing it (HA's own update card offers the
   // same choice) - not just "install".
-  update: ["install", "skip"]
+  update: ["install", "skip"],
+  // Scenes are momentary "apply this snapshot" triggers - turn_on is the only service HA exposes
+  // for them at all, there's no off/toggle. Scripts are closer to automations: turn_on runs them,
+  // turn_off interrupts one already running.
+  scene: ["turn_on"],
+  script: ["turn_on", "turn_off"]
 };
 var STREAMED_STATE_DOMAINS = [
   "light",
@@ -18304,7 +18322,11 @@ var STREAMED_STATE_DOMAINS = [
   "cover",
   "lock",
   "fan",
-  "media_player"
+  "media_player",
+  // A script's state IS "running"/"not running" (unlike a scene, which has no meaningful ongoing
+  // state beyond a last-activated timestamp) - worth live updates so the UI can reflect it started
+  // or finished without waiting for the next inventory resync.
+  "script"
 ];
 var callServicePayloadSchema = external_exports.object({
   domain: external_exports.enum(CALL_SERVICE_ALLOWED_DOMAINS),
@@ -18449,7 +18471,7 @@ var config2 = {
    * bundle (e.g. `npm run dev`'s tsx watch), hence the fallback.
    */
   get agentVersion() {
-    return true ? "0.3.1" : "0.0.0-dev";
+    return true ? "0.4.0" : "0.0.0-dev";
   }
 };
 
