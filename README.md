@@ -17,8 +17,8 @@ Assistant Long-Lived Access Token required.
 ## What's in this repository
 
 This is a published mirror of the `ha-app/` folder from Hemlogik's main (private) application
-repository, kept in sync automatically. It contains only the add-on itself - its Home Assistant
-manifest, container build files, and the compiled agent - nothing from the wider Hemlogik
-platform.
+repository, kept in sync automatically (see that repository's `.github/workflows/sync-ha-app.yml`).
+It contains only the add-on itself - its Home Assistant manifest, container build files, and the
+compiled agent - nothing from the wider Hemlogik platform.
 
 Questions or issues: [hej@hemlogik.se](mailto:hej@hemlogik.se).

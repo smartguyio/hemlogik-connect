@@ -18,6 +18,12 @@ startup: services
 boot: auto
 panel_icon: mdi:cloud-lock
 
+# Required whenever the image has its own init system, which the HA base images do (s6-overlay).
+# Default is true, which makes Supervisor run the container with Docker's own init process too -
+# s6-overlay v3 refuses to start when it isn't PID 1, which is exactly what that collision causes
+# ("s6-overlay-suexec: fatal: can only run as pid 1"). This was missing and is the fix.
+init: false
+
 # Core/Supervisor access - NOT a manually-created Home Assistant Long-Lived Access Token
 # (AGENTS spec s12). homeassistant_api supplies the locally-provided SUPERVISOR_TOKEN env var and
 # proxies REST (http://supervisor/core/api/...) + WebSocket (ws://supervisor/core/websocket) to
