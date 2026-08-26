@@ -18441,8 +18441,15 @@ var config2 = {
   get dataDir() {
     return process.env.DATA_DIR ?? "/data";
   },
+  /**
+   * Baked in at build time from config.yaml's version field (see esbuild.config.mjs) - NOT
+   * process.env.npm_package_version, which is never set when the container runs `node
+   * dist/index.js` directly (only npm itself sets it), so it silently reported "0.1.0" forever
+   * regardless of what was actually running. __AGENT_VERSION__ is undefined outside an esbuild
+   * bundle (e.g. `npm run dev`'s tsx watch), hence the fallback.
+   */
   get agentVersion() {
-    return process.env.npm_package_version ?? "0.1.0";
+    return true ? "0.3.1" : "0.0.0-dev";
   }
 };
 

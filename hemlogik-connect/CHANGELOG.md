@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+Fix: the agent's self-reported version (shown in the portal's Diagnostics tab, and sent on every
+enrollment/heartbeat) always read `process.env.npm_package_version`, which is only ever set when
+npm itself launches a process - the container runs `node dist/index.js` directly, so that env var
+was never set and it silently reported the hardcoded fallback "0.1.0" forever, no matter what was
+actually installed. Now baked in at build time from config.yaml's `version` field instead (the one
+value that's actually been kept correct every release, since Supervisor requires it to notice
+updates at all).
+
 ## 0.3.0
 
 Adds three commands for automation config editing: `get_automation_config`/`set_automation_config`

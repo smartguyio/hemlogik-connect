@@ -1,4 +1,18 @@
 import { build } from "esbuild";
+import { readFileSync } from "node:fs";
+
+// The agent's self-reported version used to read process.env.npm_package_version, which is only
+// ever set when npm itself launches the process - the actual container runs `node dist/index.js`
+// directly (see ../Dockerfile), so that env var was never set and it silently fell back to a
+// hardcoded "0.1.0" default forever, regardless of what was actually running (confirmed live:
+// connectors.agent_version and the Diagnostics tab both showed "0.1.0" while running 0.3.0).
+// config.yaml's `version` field is the one thing that's actually been bumped correctly every
+// release (Supervisor requires it to notice updates at all), so it's the real source of truth -
+// baked in at BUILD time via esbuild's `define`, not read at runtime.
+const configYaml = readFileSync("config.yaml", "utf-8");
+const versionMatch = configYaml.match(/^version:\s*"([^"]+)"/m);
+if (!versionMatch) throw new Error("Could not read version: from config.yaml");
+const agentVersion = versionMatch[1];
 
 // Bundles the agent (plus its production deps, including the connect-protocol workspace package)
 // into a single dist/index.js - the Docker image (../Dockerfile) only needs the Node runtime at
@@ -19,4 +33,5 @@ await build({
   format: "cjs",
   sourcemap: true,
   logLevel: "info",
+  define: { __AGENT_VERSION__: JSON.stringify(agentVersion) },
 });
