@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+Adds three commands for automation config editing: `get_automation_config`/`set_automation_config`
+(HA's `/api/config/automation/config/{id}` REST endpoint, reached through Supervisor's proxy) and
+`get_automation_traces` (HA's `trace/list` WebSocket command) - powers the portal's automation
+YAML editor and run-history viewer for Connect-managed installations, matching what the old
+pull-based integration already offered.
+
 ## 0.2.0
 
 Adds a `get_logs` command: fetches Home Assistant's system log, pushed proactively every 30

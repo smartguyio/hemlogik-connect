@@ -18240,6 +18240,25 @@ function parseEnvelope(raw) {
   return envelopeSchema.parse(raw);
 }
 
+// ../../packages/connect-protocol/src/automation-config.ts
+var automationConfigIdPayloadSchema = external_exports.object({
+  configId: external_exports.string().min(1)
+});
+var setAutomationConfigPayloadSchema = external_exports.object({
+  configId: external_exports.string().min(1),
+  config: external_exports.record(external_exports.string(), external_exports.unknown())
+});
+var automationTraceOutcomeSchema = external_exports.enum(["success", "error", "running", "unknown"]);
+var automationTraceSchema = external_exports.object({
+  runId: external_exports.string(),
+  timestamp: external_exports.string().nullable(),
+  outcome: automationTraceOutcomeSchema,
+  error: external_exports.string().optional()
+});
+var automationTracesResultSchema = external_exports.object({
+  traces: external_exports.array(automationTraceSchema)
+});
+
 // ../../packages/connect-protocol/src/commands.ts
 var CONNECTOR_COMMANDS = [
   "ping",
@@ -18248,7 +18267,10 @@ var CONNECTOR_COMMANDS = [
   "get_state",
   "call_service",
   "diagnostics",
-  "get_logs"
+  "get_logs",
+  "get_automation_config",
+  "set_automation_config",
+  "get_automation_traces"
 ];
 var commandNameSchema = external_exports.enum(CONNECTOR_COMMANDS);
 var CALL_SERVICE_ALLOWED_DOMAINS = [
@@ -18304,7 +18326,10 @@ var commandPayloadSchemas = {
   diagnostics: emptyPayloadSchema,
   get_logs: emptyPayloadSchema,
   get_state: getStatePayloadSchema,
-  call_service: callServicePayloadSchema
+  call_service: callServicePayloadSchema,
+  get_automation_config: automationConfigIdPayloadSchema,
+  set_automation_config: setAutomationConfigPayloadSchema,
+  get_automation_traces: automationConfigIdPayloadSchema
 };
 var commandResultSchema = external_exports.object({
   ok: external_exports.boolean(),
@@ -18477,6 +18502,13 @@ var import_websocket_server = __toESM(require_websocket_server(), 1);
 var wrapper_default = import_websocket.default;
 
 // src/supervisor-client.ts
+var SupervisorApiError = class extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+    this.name = "SupervisorApiError";
+  }
+};
 async function restFetch(path2, init = {}) {
   const res = await fetch(`${config2.supervisorBaseUrl}${path2}`, {
     ...init,
@@ -18487,7 +18519,7 @@ async function restFetch(path2, init = {}) {
     }
   });
   if (!res.ok) {
-    throw new Error(`Supervisor Core API ${path2} failed: ${res.status} ${await res.text().catch(() => "")}`);
+    throw new SupervisorApiError(res.status, `Supervisor Core API ${path2} failed: ${res.status} ${await res.text().catch(() => "")}`);
   }
   if (res.status === 204) return void 0;
   return await res.json();
@@ -18502,6 +18534,15 @@ async function callService(domain2, service, entityId, data) {
   await restFetch(`/core/api/services/${domain2}/${service}`, {
     method: "POST",
     body: JSON.stringify({ entity_id: entityId, ...data })
+  });
+}
+async function getAutomationConfig(configId) {
+  return restFetch(`/core/api/config/automation/config/${encodeURIComponent(configId)}`);
+}
+async function setAutomationConfig(configId, newConfig) {
+  await restFetch(`/core/api/config/automation/config/${encodeURIComponent(configId)}`, {
+    method: "POST",
+    body: JSON.stringify(newConfig)
   });
 }
 var SupervisorCoreSocket = class {
@@ -18574,6 +18615,15 @@ var SupervisorCoreSocket = class {
   async listRawSystemLog() {
     return this.send({ type: "system_log/list" });
   }
+  /**
+   * WS-only, no REST equivalent - "trace/list" is how HA's own automation editor gets an
+   * automation's recent run history. Returned raw/loosely-typed on purpose (undocumented-ish
+   * internal API, see ./automation-traces.ts's own comment for why); the mapping into the shared
+   * AutomationTraceSummary shape happens there, not here.
+   */
+  async listAutomationTraces(configId) {
+    return this.send({ type: "trace/list", domain: "automation", item_id: configId });
+  }
   close() {
     this.ws?.close();
     this.ws = null;
@@ -18634,6 +18684,24 @@ ${entry.exception}` : messageText;
 async function listLogs(socket) {
   const raw = await socket.listRawSystemLog();
   return [...raw].sort((a, b) => b.timestamp - a.timestamp).map(toLogEntry);
+}
+
+// src/automation-traces.ts
+function toOutcome(item) {
+  if (item.state === "running") return "running";
+  if (item.script_execution === "success") return "success";
+  if (item.script_execution) return "error";
+  return "unknown";
+}
+async function listAutomationTraces(socket, configId) {
+  const raw = await socket.listAutomationTraces(configId);
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((item) => typeof item.run_id === "string").map((item) => ({
+    runId: item.run_id,
+    timestamp: item.timestamp?.start ?? null,
+    outcome: toOutcome(item),
+    error: typeof item.error === "string" ? item.error : void 0
+  })).sort((a, b) => (b.timestamp ?? "").localeCompare(a.timestamp ?? "")).slice(0, 20);
 }
 
 // src/inventory.ts
@@ -18718,11 +18786,33 @@ async function executeCommand(command, rawPayload, socket) {
         const entries = await listLogs(socket);
         return { ok: true, data: { entries } };
       }
+      case "get_automation_config": {
+        const { configId } = payload;
+        const raw = await getAutomationConfig(configId);
+        return { ok: true, data: raw };
+      }
+      case "set_automation_config": {
+        const { configId, config: automationConfig } = payload;
+        await setAutomationConfig(configId, automationConfig);
+        return { ok: true };
+      }
+      case "get_automation_traces": {
+        const { configId } = payload;
+        const traces = await listAutomationTraces(socket, configId);
+        return { ok: true, data: { traces } };
+      }
       default:
         return { ok: false, errorCode: "unknown_command" };
     }
   } catch (err) {
     logger.error(`Command ${command} failed`, err);
+    if (err instanceof SupervisorApiError && err.status === 404 && (command === "get_automation_config" || command === "set_automation_config")) {
+      return {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage: 'Den h\xE4r automationen har inget config-id och kan inte redigeras via API:et (vanligtvis automationer skapade utan "id:" i YAML).'
+      };
+    }
     return { ok: false, errorCode: "execution_failed", errorMessage: err instanceof Error ? err.message : String(err) };
   }
 }

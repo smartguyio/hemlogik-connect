@@ -1,6 +1,7 @@
 import { parseCommandPayload, type CommandName, type CommandResult } from "@hemlogik/connect-protocol";
-import { callService, getHaConfig, type SupervisorCoreSocket } from "./supervisor-client";
+import { callService, getAutomationConfig, setAutomationConfig, getHaConfig, SupervisorApiError, type SupervisorCoreSocket } from "./supervisor-client";
 import { listLogs } from "./logs";
+import { listAutomationTraces } from "./automation-traces";
 import { buildInventorySnapshot } from "./inventory";
 import { hasTunnelToken } from "./credential-store";
 import { config } from "./config";
@@ -70,11 +71,40 @@ export async function executeCommand(command: CommandName, rawPayload: unknown, 
         return { ok: true, data: { entries } };
       }
 
+      case "get_automation_config": {
+        const { configId } = payload as { configId: string };
+        const raw = await getAutomationConfig(configId);
+        return { ok: true, data: raw };
+      }
+
+      case "set_automation_config": {
+        const { configId, config: automationConfig } = payload as { configId: string; config: Record<string, unknown> };
+        await setAutomationConfig(configId, automationConfig);
+        return { ok: true };
+      }
+
+      case "get_automation_traces": {
+        const { configId } = payload as { configId: string };
+        const traces = await listAutomationTraces(socket, configId);
+        return { ok: true, data: { traces } };
+      }
+
       default:
         return { ok: false, errorCode: "unknown_command" };
     }
   } catch (err) {
     logger.error(`Command ${command} failed`, err);
+    // A 404 from the automation config API specifically means "no explicit id: field" - a normal,
+    // expected condition (not every automation has one), so it gets its own errorCode + friendly
+    // message rather than the generic execution_failed, same distinction the portal's old
+    // automation-config-actions.ts's HaClientError handling made.
+    if (err instanceof SupervisorApiError && err.status === 404 && (command === "get_automation_config" || command === "set_automation_config")) {
+      return {
+        ok: false,
+        errorCode: "not_found",
+        errorMessage: 'Den här automationen har inget config-id och kan inte redigeras via API:et (vanligtvis automationer skapade utan "id:" i YAML).',
+      };
+    }
     return { ok: false, errorCode: "execution_failed", errorMessage: err instanceof Error ? err.message : String(err) };
   }
 }

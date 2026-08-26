@@ -27,6 +27,17 @@ export interface HaSystemLogEntry {
   count?: number;
 }
 
+/** Thrown by restFetch on a non-2xx response - carries the real HTTP status so callers (like commands.ts's automation-config handling) can distinguish e.g. 404 "no such config id" from a genuine failure, same distinction the portal's old HaClientError made. */
+export class SupervisorApiError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string
+  ) {
+    super(message);
+    this.name = "SupervisorApiError";
+  }
+}
+
 async function restFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${config.supervisorBaseUrl}${path}`, {
     ...init,
@@ -37,7 +48,7 @@ async function restFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   });
   if (!res.ok) {
-    throw new Error(`Supervisor Core API ${path} failed: ${res.status} ${await res.text().catch(() => "")}`);
+    throw new SupervisorApiError(res.status, `Supervisor Core API ${path} failed: ${res.status} ${await res.text().catch(() => "")}`);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -55,6 +66,26 @@ export async function callService(domain: string, service: string, entityId: str
   await restFetch(`/core/api/services/${domain}/${service}`, {
     method: "POST",
     body: JSON.stringify({ entity_id: entityId, ...data }),
+  });
+}
+
+/**
+ * GET /api/config/automation/config/{id} - an automation's raw config (trigger/condition/action/
+ * etc), keyed by its config `id` (the entity's `id` attribute - NOT its entity_id). Only
+ * automations created with an explicit id are reachable this way; HA returns 404 otherwise - a
+ * straight port of the same call the portal's own integrations/home-assistant/client.server.ts
+ * already makes for the old pull-based integration, just reached through Supervisor's proxy here
+ * instead of a customer-supplied base URL + token.
+ */
+export async function getAutomationConfig(configId: string): Promise<Record<string, unknown>> {
+  return restFetch<Record<string, unknown>>(`/core/api/config/automation/config/${encodeURIComponent(configId)}`);
+}
+
+/** POST /api/config/automation/config/{id} - replaces an automation's config wholesale. */
+export async function setAutomationConfig(configId: string, newConfig: Record<string, unknown>): Promise<void> {
+  await restFetch(`/core/api/config/automation/config/${encodeURIComponent(configId)}`, {
+    method: "POST",
+    body: JSON.stringify(newConfig),
   });
 }
 
@@ -146,6 +177,16 @@ export class SupervisorCoreSocket {
    */
   async listRawSystemLog(): Promise<HaSystemLogEntry[]> {
     return this.send({ type: "system_log/list" }) as Promise<HaSystemLogEntry[]>;
+  }
+
+  /**
+   * WS-only, no REST equivalent - "trace/list" is how HA's own automation editor gets an
+   * automation's recent run history. Returned raw/loosely-typed on purpose (undocumented-ish
+   * internal API, see ./automation-traces.ts's own comment for why); the mapping into the shared
+   * AutomationTraceSummary shape happens there, not here.
+   */
+  async listAutomationTraces(configId: string): Promise<unknown> {
+    return this.send({ type: "trace/list", domain: "automation", item_id: configId });
   }
 
   close(): void {
