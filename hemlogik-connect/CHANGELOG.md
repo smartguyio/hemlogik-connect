@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2
+
+Fix: bundle the agent as CommonJS instead of an ES module. The Docker image ships only
+`dist/index.js`, with no `package.json` alongside it - Node defaults a bare `.js` file with no
+"type": "module" in scope to CommonJS, so the previous ESM bundle's top-level `import` failed with
+"Cannot use import statement outside a module" on every start.
+
 ## 0.1.1
 
 Fix: add missing `init: false` - without it, Supervisor also injects Docker's own init process

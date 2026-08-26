@@ -1,17 +1,11 @@
-import { createRequire } from 'module'; const require = createRequire(import.meta.url);
+"use strict";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-}) : x)(function(x) {
-  if (typeof require !== "undefined") return require.apply(this, arguments);
-  throw Error('Dynamic require of "' + x + '" is not supported');
-});
-var __commonJS = (cb, mod) => function __require2() {
+var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 var __export = (target, all) => {
@@ -37,12 +31,12 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // ../../node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "../../node_modules/ws/lib/constants.js"(exports, module) {
+  "../../node_modules/ws/lib/constants.js"(exports2, module2) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
     var hasBlob = typeof Blob !== "undefined";
     if (hasBlob) BINARY_TYPES.push("blob");
-    module.exports = {
+    module2.exports = {
       BINARY_TYPES,
       CLOSE_TIMEOUT: 3e4,
       EMPTY_BUFFER: Buffer.alloc(0),
@@ -60,7 +54,7 @@ var require_constants = __commonJS({
 
 // ../../node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "../../node_modules/ws/lib/buffer-util.js"(exports, module) {
+  "../../node_modules/ws/lib/buffer-util.js"(exports2, module2) {
     "use strict";
     var { EMPTY_BUFFER } = require_constants();
     var FastBuffer = Buffer[Symbol.species];
@@ -109,7 +103,7 @@ var require_buffer_util = __commonJS({
       }
       return buf;
     }
-    module.exports = {
+    module2.exports = {
       concat,
       mask: _mask,
       toArrayBuffer,
@@ -118,12 +112,12 @@ var require_buffer_util = __commonJS({
     };
     if (!process.env.WS_NO_BUFFER_UTIL) {
       try {
-        const bufferUtil = __require("bufferutil");
-        module.exports.mask = function(source, mask, output, offset, length) {
+        const bufferUtil = require("bufferutil");
+        module2.exports.mask = function(source, mask, output, offset, length) {
           if (length < 48) _mask(source, mask, output, offset, length);
           else bufferUtil.mask(source, mask, output, offset, length);
         };
-        module.exports.unmask = function(buffer, mask) {
+        module2.exports.unmask = function(buffer, mask) {
           if (buffer.length < 32) _unmask(buffer, mask);
           else bufferUtil.unmask(buffer, mask);
         };
@@ -135,7 +129,7 @@ var require_buffer_util = __commonJS({
 
 // ../../node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "../../node_modules/ws/lib/limiter.js"(exports, module) {
+  "../../node_modules/ws/lib/limiter.js"(exports2, module2) {
     "use strict";
     var kDone = Symbol("kDone");
     var kRun = Symbol("kRun");
@@ -179,15 +173,15 @@ var require_limiter = __commonJS({
         }
       }
     };
-    module.exports = Limiter;
+    module2.exports = Limiter;
   }
 });
 
 // ../../node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "../../node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+  "../../node_modules/ws/lib/permessage-deflate.js"(exports2, module2) {
     "use strict";
-    var zlib = __require("zlib");
+    var zlib = require("zlib");
     var bufferUtil = require_buffer_util();
     var Limiter = require_limiter();
     var { kStatusCode } = require_constants();
@@ -537,7 +531,7 @@ var require_permessage_deflate = __commonJS({
         });
       }
     };
-    module.exports = PerMessageDeflate2;
+    module2.exports = PerMessageDeflate2;
     function deflateOnData(chunk) {
       this[kBuffers].push(chunk);
       this[kTotalLength] += chunk.length;
@@ -568,9 +562,9 @@ var require_permessage_deflate = __commonJS({
 
 // ../../node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "../../node_modules/ws/lib/validation.js"(exports, module) {
+  "../../node_modules/ws/lib/validation.js"(exports2, module2) {
     "use strict";
-    var { isUtf8 } = __require("buffer");
+    var { isUtf8 } = require("buffer");
     var { hasBlob } = require_constants();
     var tokenChars = [
       0,
@@ -745,20 +739,20 @@ var require_validation = __commonJS({
     function isBlob(value) {
       return hasBlob && typeof value === "object" && typeof value.arrayBuffer === "function" && typeof value.type === "string" && typeof value.stream === "function" && (value[Symbol.toStringTag] === "Blob" || value[Symbol.toStringTag] === "File");
     }
-    module.exports = {
+    module2.exports = {
       isBlob,
       isValidStatusCode,
       isValidUTF8: _isValidUTF8,
       tokenChars
     };
     if (isUtf8) {
-      module.exports.isValidUTF8 = function(buf) {
+      module2.exports.isValidUTF8 = function(buf) {
         return buf.length < 24 ? _isValidUTF8(buf) : isUtf8(buf);
       };
     } else if (!process.env.WS_NO_UTF_8_VALIDATE) {
       try {
-        const isValidUTF8 = __require("utf-8-validate");
-        module.exports.isValidUTF8 = function(buf) {
+        const isValidUTF8 = require("utf-8-validate");
+        module2.exports.isValidUTF8 = function(buf) {
           return buf.length < 32 ? _isValidUTF8(buf) : isValidUTF8(buf);
         };
       } catch (e) {
@@ -769,9 +763,9 @@ var require_validation = __commonJS({
 
 // ../../node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "../../node_modules/ws/lib/receiver.js"(exports, module) {
+  "../../node_modules/ws/lib/receiver.js"(exports2, module2) {
     "use strict";
-    var { Writable } = __require("stream");
+    var { Writable } = require("stream");
     var PerMessageDeflate2 = require_permessage_deflate();
     var {
       BINARY_TYPES,
@@ -1395,19 +1389,19 @@ var require_receiver = __commonJS({
         return err;
       }
     };
-    module.exports = Receiver2;
+    module2.exports = Receiver2;
   }
 });
 
 // ../../node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "../../node_modules/ws/lib/sender.js"(exports, module) {
+  "../../node_modules/ws/lib/sender.js"(exports2, module2) {
     "use strict";
-    var { Duplex } = __require("stream");
-    var { randomFillSync } = __require("crypto");
+    var { Duplex } = require("stream");
+    var { randomFillSync } = require("crypto");
     var {
       types: { isUint8Array }
-    } = __require("util");
+    } = require("util");
     var PerMessageDeflate2 = require_permessage_deflate();
     var { EMPTY_BUFFER, kWebSocket, NOOP } = require_constants();
     var { isBlob, isValidStatusCode } = require_validation();
@@ -1876,7 +1870,7 @@ var require_sender = __commonJS({
         }
       }
     };
-    module.exports = Sender2;
+    module2.exports = Sender2;
     function callCallbacks(sender, err, cb) {
       if (typeof cb === "function") cb(err);
       for (let i = 0; i < sender._queue.length; i++) {
@@ -1894,7 +1888,7 @@ var require_sender = __commonJS({
 
 // ../../node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "../../node_modules/ws/lib/event-target.js"(exports, module) {
+  "../../node_modules/ws/lib/event-target.js"(exports2, module2) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants();
     var kCode = Symbol("kCode");
@@ -2104,7 +2098,7 @@ var require_event_target = __commonJS({
         }
       }
     };
-    module.exports = {
+    module2.exports = {
       CloseEvent,
       ErrorEvent,
       Event,
@@ -2123,7 +2117,7 @@ var require_event_target = __commonJS({
 
 // ../../node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "../../node_modules/ws/lib/extension.js"(exports, module) {
+  "../../node_modules/ws/lib/extension.js"(exports2, module2) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -2270,22 +2264,22 @@ var require_extension = __commonJS({
         }).join(", ");
       }).join(", ");
     }
-    module.exports = { format, parse: parse3 };
+    module2.exports = { format, parse: parse3 };
   }
 });
 
 // ../../node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "../../node_modules/ws/lib/websocket.js"(exports, module) {
+  "../../node_modules/ws/lib/websocket.js"(exports2, module2) {
     "use strict";
-    var EventEmitter = __require("events");
-    var https = __require("https");
-    var http = __require("http");
-    var net = __require("net");
-    var tls = __require("tls");
-    var { randomBytes, createHash } = __require("crypto");
-    var { Duplex, Readable } = __require("stream");
-    var { URL: URL2 } = __require("url");
+    var EventEmitter = require("events");
+    var https = require("https");
+    var http = require("http");
+    var net = require("net");
+    var tls = require("tls");
+    var { randomBytes, createHash } = require("crypto");
+    var { Duplex, Readable } = require("stream");
+    var { URL: URL2 } = require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
     var Receiver2 = require_receiver();
     var Sender2 = require_sender();
@@ -2754,7 +2748,7 @@ var require_websocket = __commonJS({
     });
     WebSocket2.prototype.addEventListener = addEventListener;
     WebSocket2.prototype.removeEventListener = removeEventListener;
-    module.exports = WebSocket2;
+    module2.exports = WebSocket2;
     function initAsClient(websocket, address, protocols, options) {
       const opts = {
         allowSynchronousEvents: true,
@@ -3172,10 +3166,10 @@ var require_websocket = __commonJS({
 
 // ../../node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "../../node_modules/ws/lib/stream.js"(exports, module) {
+  "../../node_modules/ws/lib/stream.js"(exports2, module2) {
     "use strict";
     var WebSocket2 = require_websocket();
-    var { Duplex } = __require("stream");
+    var { Duplex } = require("stream");
     function emitClose(stream) {
       stream.emit("close");
     }
@@ -3264,13 +3258,13 @@ var require_stream = __commonJS({
       duplex.on("error", duplexOnError);
       return duplex;
     }
-    module.exports = createWebSocketStream2;
+    module2.exports = createWebSocketStream2;
   }
 });
 
 // ../../node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "../../node_modules/ws/lib/subprotocol.js"(exports, module) {
+  "../../node_modules/ws/lib/subprotocol.js"(exports2, module2) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse3(header) {
@@ -3309,18 +3303,18 @@ var require_subprotocol = __commonJS({
       protocols.add(protocol);
       return protocols;
     }
-    module.exports = { parse: parse3 };
+    module2.exports = { parse: parse3 };
   }
 });
 
 // ../../node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "../../node_modules/ws/lib/websocket-server.js"(exports, module) {
+  "../../node_modules/ws/lib/websocket-server.js"(exports2, module2) {
     "use strict";
-    var EventEmitter = __require("events");
-    var http = __require("http");
-    var { Duplex } = __require("stream");
-    var { createHash } = __require("crypto");
+    var EventEmitter = require("events");
+    var http = require("http");
+    var { Duplex } = require("stream");
+    var { createHash } = require("crypto");
     var extension2 = require_extension();
     var PerMessageDeflate2 = require_permessage_deflate();
     var subprotocol2 = require_subprotocol();
@@ -3672,7 +3666,7 @@ var require_websocket_server = __commonJS({
         cb(ws, req);
       }
     };
-    module.exports = WebSocketServer2;
+    module2.exports = WebSocketServer2;
     function addListeners(server, map2) {
       for (const event of Object.keys(map2)) server.on(event, map2[event]);
       return function removeListeners() {
@@ -18406,29 +18400,29 @@ var logger = {
 };
 
 // src/credential-store.ts
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import path from "node:path";
-var CREDENTIAL_PATH = () => path.join(config2.dataDir, "connector-credential.json");
-var TUNNEL_TOKEN_PATH = () => path.join(config2.dataDir, "tunnel-token");
+var import_promises = require("node:fs/promises");
+var import_node_fs = require("node:fs");
+var import_node_path = __toESM(require("node:path"), 1);
+var CREDENTIAL_PATH = () => import_node_path.default.join(config2.dataDir, "connector-credential.json");
+var TUNNEL_TOKEN_PATH = () => import_node_path.default.join(config2.dataDir, "tunnel-token");
 async function loadCredential() {
   try {
-    const raw = await readFile(CREDENTIAL_PATH(), "utf8");
+    const raw = await (0, import_promises.readFile)(CREDENTIAL_PATH(), "utf8");
     return JSON.parse(raw);
   } catch {
     return null;
   }
 }
 async function saveCredential(credential) {
-  await mkdir(config2.dataDir, { recursive: true });
-  await writeFile(CREDENTIAL_PATH(), JSON.stringify(credential, null, 2), { mode: 384 });
+  await (0, import_promises.mkdir)(config2.dataDir, { recursive: true });
+  await (0, import_promises.writeFile)(CREDENTIAL_PATH(), JSON.stringify(credential, null, 2), { mode: 384 });
 }
 function hasTunnelToken() {
-  return existsSync(TUNNEL_TOKEN_PATH());
+  return (0, import_node_fs.existsSync)(TUNNEL_TOKEN_PATH());
 }
 async function saveTunnelToken(token) {
-  await mkdir(config2.dataDir, { recursive: true });
-  await writeFile(TUNNEL_TOKEN_PATH(), token, { mode: 384 });
+  await (0, import_promises.mkdir)(config2.dataDir, { recursive: true });
+  await (0, import_promises.writeFile)(TUNNEL_TOKEN_PATH(), token, { mode: 384 });
 }
 
 // ../../node_modules/ws/wrapper.mjs
