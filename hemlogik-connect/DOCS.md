@@ -21,18 +21,13 @@ it.
 1. Add this repository to your Home Assistant App/Add-on store, if it isn't already there.
 2. Find **Hemlogik Connect** in the store and install it.
 3. Start the App.
-4. Add the following to Home Assistant's own `configuration.yaml` (via the **File editor** or
-   **Studio Code Server** add-on), then do a full **Settings → System → Restart** of Home
-   Assistant itself (not just this App) - this tells Home Assistant to trust requests arriving
-   through your secure remote-access connection, without which it refuses them outright:
-   ```yaml
-   http:
-     use_x_forwarded_for: true
-     trusted_proxies:
-       - 172.30.32.0/23
-   ```
-   If you already have an `http:` section in your configuration, merge these two lines into it
-   rather than adding a second `http:` block.
+4. In Home Assistant: **Settings → System → Network**, scroll to the HTTP server section, turn on
+   **Trust X-Forwarded-For**, and add `172.30.32.0/23` under **Trusted proxies** - this tells Home
+   Assistant to trust requests arriving through your secure remote-access connection, without
+   which it refuses them outright with a plain "400: Bad Request". (This used to be a
+   `configuration.yaml` edit; Home Assistant moved it into this UI page - if you still have an old
+   `http:` block with `trusted_proxies`/`use_x_forwarded_for` in `configuration.yaml`, remove it,
+   it's now silently ignored.) Restart Home Assistant afterward.
 
 ## Configuration
 
@@ -53,11 +48,11 @@ log_level: "info"
 
 Leave this alone unless Hemlogik support asks you to change it for troubleshooting.
 
-**You do not need to create a Home Assistant Long-Lived Access Token or configure Cloudflare
-yourself** - the only file edit involved at all is the small `trusted_proxies` addition in step 4
-above, which every reverse-proxy-based remote access setup for Home Assistant requires regardless
-of provider. If a setup guide asks for anything beyond that for Hemlogik Connect specifically,
-something is wrong - contact Hemlogik support.
+**You do not need to create a Home Assistant Long-Lived Access Token, configure Cloudflare
+yourself, or edit any files** - the only extra step at all is the small Trusted proxies setting in
+step 4 above, which every reverse-proxy-based remote access setup for Home Assistant requires
+regardless of provider. If a setup guide asks for anything beyond that for Hemlogik Connect
+specifically, something is wrong - contact Hemlogik support.
 
 ## Usage
 
@@ -97,9 +92,12 @@ secure tunnel is being set up. If it still doesn't work after that, check the Ap
 or ask Hemlogik support to check the installation's diagnostics in the portal.
 
 **The remote URL loads but shows a plain "400: Bad Request".** Home Assistant is rejecting the
-connection because it doesn't trust it yet - you're missing (or haven't fully restarted after
-adding) the `trusted_proxies` configuration from step 4 of Installation above. This needs a full
-Home Assistant restart, not just an App restart, to take effect.
+connection because it doesn't trust it yet - check the Trusted proxies setting from step 4 of
+Installation above (Settings → System → Network). This needs a full Home Assistant restart, not
+just an App restart, to take effect. Note this is a UI setting, not a `configuration.yaml` edit -
+if you have an old `http:` block with `trusted_proxies` in your YAML config, Home Assistant now
+silently ignores it (with only a Repairs warning, not an error), which can make this look like
+nothing you did had any effect.
 
 **I want to disconnect a Home Assistant instance and connect a different one to the same Hemlogik
 installation.** Ask your Hemlogik installer to issue a new connection key against the same
