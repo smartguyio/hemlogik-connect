@@ -6,6 +6,7 @@ import { enroll } from "./enrollment";
 import { SupervisorCoreSocket, getHaConfig } from "./supervisor-client";
 import { GatewayClient } from "./gateway-client";
 import { buildInventorySnapshot } from "./inventory";
+import { listLogs } from "./logs";
 import { shouldForwardStateEvent } from "./events";
 
 const SELF_HEAL_INTERVAL_MS = 30 * 60 * 1000; // AGENTS spec s17/s22 - periodic resync without being told to, on top of on-demand refresh_inventory
@@ -45,6 +46,26 @@ async function main(): Promise<void> {
 
   await resync();
   setInterval(resync, SELF_HEAL_INTERVAL_MS);
+
+  /**
+   * Same cadence and same "unsolicited push, not just on-demand" idea as resync() above -
+   * pushing this periodically rather than only ever in response to a get_logs command is what
+   * keeps the portal's stored-log fallback fresh independent of whether anyone had the Logs tab
+   * open while this connector was still online (the moment that matters most for looking at logs
+   * is often right after something's already gone offline).
+   */
+  async function pushLogs(): Promise<void> {
+    try {
+      const entries = await listLogs(socket);
+      gateway.sendEnvelope(makeEnvelope("logs", { entries }));
+      logger.debug(`Logs pushed: ${entries.length} entries`);
+    } catch (err) {
+      logger.error("Periodic log push failed", err);
+    }
+  }
+
+  await pushLogs();
+  setInterval(pushLogs, SELF_HEAL_INTERVAL_MS);
 
   await socket.subscribeStateChanged((event) => {
     if (!event.new_state || !shouldForwardStateEvent(event.entity_id, knownEntityIds)) return;

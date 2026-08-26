@@ -18,6 +18,15 @@ export interface HaState {
   last_changed: string;
 }
 
+export interface HaSystemLogEntry {
+  name: string;
+  message: string | string[];
+  level: string;
+  timestamp: number;
+  exception?: string;
+  count?: number;
+}
+
 async function restFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${config.supervisorBaseUrl}${path}`, {
     ...init,
@@ -125,6 +134,18 @@ export class SupervisorCoreSocket {
   async subscribeStateChanged(handler: (event: { entity_id: string; new_state: HaState | null }) => void): Promise<void> {
     this.eventHandlers.add(handler);
     await this.send({ type: "subscribe_events", event_type: "state_changed" });
+  }
+
+  /**
+   * Home Assistant removed the documented REST `/api/error_log` endpoint in recent versions
+   * (confirmed against developers.home-assistant.io - still listed in older docs, 404s on
+   * current installs). `system_log/list` over the WebSocket API is the supported replacement,
+   * and returns already-structured entries rather than a plaintext blob to regex-parse - same
+   * finding this monorepo's own integrations/home-assistant/logs.server.ts already made; see
+   * ./logs.ts for the mapping into the shared LogEntry shape.
+   */
+  async listRawSystemLog(): Promise<HaSystemLogEntry[]> {
+    return this.send({ type: "system_log/list" }) as Promise<HaSystemLogEntry[]>;
   }
 
   close(): void {

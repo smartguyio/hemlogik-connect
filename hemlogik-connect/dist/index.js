@@ -18224,7 +18224,7 @@ config(en_default());
 
 // ../../packages/connect-protocol/src/envelope.ts
 var PROTOCOL_VERSION = 1;
-var envelopeTypeSchema = external_exports.enum(["command", "command_result", "event", "heartbeat", "config", "inventory", "ack", "error"]);
+var envelopeTypeSchema = external_exports.enum(["command", "command_result", "event", "heartbeat", "config", "inventory", "logs", "ack", "error"]);
 var envelopeSchema = external_exports.object({
   v: external_exports.literal(PROTOCOL_VERSION),
   id: external_exports.string().min(1),
@@ -18247,10 +18247,32 @@ var CONNECTOR_COMMANDS = [
   "refresh_inventory",
   "get_state",
   "call_service",
-  "diagnostics"
+  "diagnostics",
+  "get_logs"
 ];
 var commandNameSchema = external_exports.enum(CONNECTOR_COMMANDS);
-var CALL_SERVICE_ALLOWED_DOMAINS = ["light", "switch", "climate"];
+var CALL_SERVICE_ALLOWED_DOMAINS = [
+  "light",
+  "switch",
+  "climate",
+  "cover",
+  "fan",
+  "media_player",
+  "automation",
+  "update"
+];
+var CALL_SERVICE_ALLOWED_SERVICES = {
+  light: ["turn_on", "turn_off", "toggle"],
+  switch: ["turn_on", "turn_off", "toggle"],
+  climate: ["set_temperature", "set_hvac_mode"],
+  cover: ["open_cover", "close_cover", "stop_cover"],
+  fan: ["turn_on", "turn_off", "toggle"],
+  media_player: ["turn_on", "turn_off", "media_play", "media_pause", "media_stop", "volume_set"],
+  automation: ["turn_on", "turn_off", "trigger"],
+  // "skip" dismisses a pending update without installing it (HA's own update card offers the
+  // same choice) - not just "install".
+  update: ["install", "skip"]
+};
 var STREAMED_STATE_DOMAINS = [
   "light",
   "switch",
@@ -18259,13 +18281,17 @@ var STREAMED_STATE_DOMAINS = [
   "binary_sensor",
   "cover",
   "lock",
-  "fan"
+  "fan",
+  "media_player"
 ];
 var callServicePayloadSchema = external_exports.object({
   domain: external_exports.enum(CALL_SERVICE_ALLOWED_DOMAINS),
   service: external_exports.string().min(1),
   entityId: external_exports.string().min(1),
   data: external_exports.record(external_exports.string(), external_exports.unknown()).optional()
+}).refine((v) => CALL_SERVICE_ALLOWED_SERVICES[v.domain].includes(v.service), {
+  message: "service not allowed for this domain",
+  path: ["service"]
 });
 var getStatePayloadSchema = external_exports.object({
   entityId: external_exports.string().min(1)
@@ -18276,6 +18302,7 @@ var commandPayloadSchemas = {
   get_installation_info: emptyPayloadSchema,
   refresh_inventory: emptyPayloadSchema,
   diagnostics: emptyPayloadSchema,
+  get_logs: emptyPayloadSchema,
   get_state: getStatePayloadSchema,
   call_service: callServicePayloadSchema
 };
@@ -18357,6 +18384,19 @@ var configPushPayloadSchema = external_exports.object({
   tunnelToken: external_exports.string().optional()
 });
 
+// ../../packages/connect-protocol/src/logs.ts
+var LOG_LEVELS = ["debug", "info", "warning", "error", "critical"];
+var logLevelSchema = external_exports.enum(LOG_LEVELS);
+var logEntrySchema = external_exports.object({
+  timestamp: external_exports.string(),
+  level: logLevelSchema,
+  logger: external_exports.string(),
+  message: external_exports.string()
+});
+var logSnapshotSchema = external_exports.object({
+  entries: external_exports.array(logEntrySchema)
+});
+
 // src/config.ts
 var config2 = {
   get supervisorToken() {
@@ -18402,7 +18442,7 @@ var logger = {
 // src/credential-store.ts
 var import_promises = require("node:fs/promises");
 var import_node_fs = require("node:fs");
-var import_node_path = __toESM(require("node:path"), 1);
+var import_node_path = __toESM(require("node:path"));
 var CREDENTIAL_PATH = () => import_node_path.default.join(config2.dataDir, "connector-credential.json");
 var TUNNEL_TOKEN_PATH = () => import_node_path.default.join(config2.dataDir, "tunnel-token");
 async function loadCredential() {
@@ -18523,6 +18563,17 @@ var SupervisorCoreSocket = class {
     this.eventHandlers.add(handler);
     await this.send({ type: "subscribe_events", event_type: "state_changed" });
   }
+  /**
+   * Home Assistant removed the documented REST `/api/error_log` endpoint in recent versions
+   * (confirmed against developers.home-assistant.io - still listed in older docs, 404s on
+   * current installs). `system_log/list` over the WebSocket API is the supported replacement,
+   * and returns already-structured entries rather than a plaintext blob to regex-parse - same
+   * finding this monorepo's own integrations/home-assistant/logs.server.ts already made; see
+   * ./logs.ts for the mapping into the shared LogEntry shape.
+   */
+  async listRawSystemLog() {
+    return this.send({ type: "system_log/list" });
+  }
   close() {
     this.ws?.close();
     this.ws = null;
@@ -18562,6 +18613,27 @@ async function enroll() {
   await saveCredential(credential);
   logger.info(`Enrollment successful - paired with connector ${parsed.connector_id}`);
   return credential;
+}
+
+// src/logs.ts
+var KNOWN_LEVELS = new Set(LOG_LEVELS);
+function toLogEntry(entry) {
+  const lowerLevel = (entry.level ?? "info").toLowerCase();
+  const level = KNOWN_LEVELS.has(lowerLevel) ? lowerLevel : "info";
+  const messageText = Array.isArray(entry.message) ? entry.message.join("\n") : entry.message;
+  const withException = entry.exception ? `${messageText}
+${entry.exception}` : messageText;
+  const countPrefix = entry.count && entry.count > 1 ? `(\xD7${entry.count}) ` : "";
+  return {
+    timestamp: new Date(entry.timestamp * 1e3).toISOString(),
+    level,
+    logger: entry.name,
+    message: countPrefix + withException
+  };
+}
+async function listLogs(socket) {
+  const raw = await socket.listRawSystemLog();
+  return [...raw].sort((a, b) => b.timestamp - a.timestamp).map(toLogEntry);
 }
 
 // src/inventory.ts
@@ -18639,11 +18711,12 @@ async function executeCommand(command, rawPayload, socket) {
       }
       case "call_service": {
         const { domain: domain2, service, entityId, data } = payload;
-        if (!CALL_SERVICE_ALLOWED_DOMAINS.includes(domain2)) {
-          return { ok: false, errorCode: "domain_not_allowed", errorMessage: `Domain not allowed: ${domain2}` };
-        }
         await callService(domain2, service, entityId, data);
         return { ok: true };
+      }
+      case "get_logs": {
+        const entries = await listLogs(socket);
+        return { ok: true, data: { entries } };
       }
       default:
         return { ok: false, errorCode: "unknown_command" };
@@ -18787,6 +18860,17 @@ async function main() {
   }
   await resync();
   setInterval(resync, SELF_HEAL_INTERVAL_MS);
+  async function pushLogs() {
+    try {
+      const entries = await listLogs(socket);
+      gateway.sendEnvelope(makeEnvelope("logs", { entries }));
+      logger.debug(`Logs pushed: ${entries.length} entries`);
+    } catch (err) {
+      logger.error("Periodic log push failed", err);
+    }
+  }
+  await pushLogs();
+  setInterval(pushLogs, SELF_HEAL_INTERVAL_MS);
   await socket.subscribeStateChanged((event) => {
     if (!event.new_state || !shouldForwardStateEvent(event.entity_id, knownEntityIds)) return;
     gateway.sendStateEvent({
