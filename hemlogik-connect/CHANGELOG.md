@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+Fix: add missing `init: false` - without it, Supervisor also injects Docker's own init process
+alongside the App's s6-overlay, which s6-overlay v3 refuses to start under
+("s6-overlay-suexec: fatal: can only run as pid 1"). The App would never start before this fix.
+
 ## 0.1.0
 
 Initial release - enrollment via connection key, secure outbound connection to Hemlogik Cloud,
