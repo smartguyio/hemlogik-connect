@@ -76,6 +76,13 @@ profile hemlogik_connect flags=(attach_disconnected,mediate_deleted) {
     /dev/urandom r,
     /dev/null rw,
 
+    # Node's OpenSSL 3.x provider/engine config, read unconditionally at crypto-subsystem init -
+    # NOT the same thing as CA certificate verification (Node uses its own bundled Mozilla CA
+    # store for that, no filesystem access needed there). Missing this was a real, confirmed
+    # production bug: denied here, OpenSSL logs "BIO_new_file:Permission denied" and Node exits
+    # immediately on every single startup attempt (exit code 13, s6 restart-looping forever).
+    /etc/ssl/** r,
+
     # Node/V8/libuv's own runtime introspection - narrowly /proc/self only, never bare /proc.
     /proc/self/** r,
 

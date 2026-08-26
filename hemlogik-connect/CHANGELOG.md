@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1
+
+Fix: 0.5.0's AppArmor profile didn't grant the agent read access to `/etc/ssl/openssl.cnf` -
+Node's OpenSSL 3.x provider config is read unconditionally at crypto-subsystem init (unrelated to
+CA certificate verification, which uses Node's own bundled store and needed no filesystem access
+at all). Denied, this crashed the agent on every single startup attempt
+(`BIO_new_file:Permission denied`, exit code 13) while cloudflared - a separate process under its
+own profile, with no OpenSSL config dependency - kept running, so the connector showed offline
+while remote access stayed reachable. Confirmed live and fixed.
+
 ## 0.5.0
 
 Adds a custom AppArmor profile (`apparmor.txt`) - sandboxes the container to exactly what it
