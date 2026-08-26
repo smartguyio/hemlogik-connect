@@ -158,16 +158,38 @@ export class SupervisorCoreSocket {
    * even for devices the customer had explicitly renamed.
    */
   async listDevices(): Promise<
-    Array<{ id: string; area_id: string | null; name: string | null; name_by_user: string | null; manufacturer: string | null; model: string | null }>
+    Array<{
+      id: string;
+      area_id: string | null;
+      name: string | null;
+      name_by_user: string | null;
+      manufacturer: string | null;
+      model: string | null;
+      /** "service" marks a logical device representing an integration/hub itself (e.g. an HA
+       *  add-on's own diagnostics device, an MQTT broker's own device) rather than a physical
+       *  device - inventory.ts drops these entirely, matching the old pull-based integration's
+       *  own exclusion (its devices.server.ts's HaDeviceRegistryEntry). */
+      entry_type: string | null;
+    }>
   > {
     return this.send({ type: "config/device_registry/list" }) as Promise<
-      Array<{ id: string; area_id: string | null; name: string | null; name_by_user: string | null; manufacturer: string | null; model: string | null }>
+      Array<{
+        id: string;
+        area_id: string | null;
+        name: string | null;
+        name_by_user: string | null;
+        manufacturer: string | null;
+        model: string | null;
+        entry_type: string | null;
+      }>
     >;
   }
 
-  async listEntities(): Promise<Array<{ entity_id: string; device_id: string | null; area_id: string | null }>> {
+  async listEntities(): Promise<
+    Array<{ entity_id: string; device_id: string | null; area_id: string | null; entity_category: string | null }>
+  > {
     return this.send({ type: "config/entity_registry/list" }) as Promise<
-      Array<{ entity_id: string; device_id: string | null; area_id: string | null }>
+      Array<{ entity_id: string; device_id: string | null; area_id: string | null; entity_category: string | null }>
     >;
   }
 

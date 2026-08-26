@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.2
+
+Two device-sync fixes reported live:
+- A device's name could sync as a literal empty string instead of falling back to its manufacturer
+  default or id - some integrations (Tuya's cloud integration in particular) leave HA's `name`
+  field empty rather than null.
+- Integration/hub pseudo-devices (an HA add-on's own diagnostics device, an MQTT broker's own
+  device, etc. - HA's own `entry_type: "service"` marker) no longer sync as if they were physical
+  devices, matching the old pull-based integration's exact exclusion. Diagnostic/config-category
+  entities (battery %, link quality, RSSI) are now tagged so the portal can exclude them from a
+  device's status badge without hiding them from its entity list - they were dragging otherwise-
+  working devices into a constant "warning" state.
+
 ## 0.5.1
 
 Fix: 0.5.0's AppArmor profile didn't grant the agent read access to `/etc/ssl/openssl.cnf` -

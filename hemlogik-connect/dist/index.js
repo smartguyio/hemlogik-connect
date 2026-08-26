@@ -18418,7 +18418,17 @@ var haEntitySchema = external_exports.object({
   friendly_name: external_exports.string().optional(),
   state: external_exports.string().nullable(),
   attributes: external_exports.record(external_exports.string(), external_exports.unknown()).default({}),
-  available: external_exports.boolean().default(true)
+  available: external_exports.boolean().default(true),
+  /**
+   * HA's own entity registry "diagnostic"/"config" categories (null = a normal, primary entity) -
+   * used to keep noisy diagnostic sub-entities (battery %, link quality, RSSI - HA/Zigbee
+   * integrations attach these to nearly every device) from dragging a device's status badge into
+   * "warning" just because they flicker unavailable, while still showing them on the device's own
+   * entity list. Devices themselves are filtered at the agent (entry_type "service" - an
+   * integration/hub's own pseudo-device, e.g. an HA add-on's own diagnostics - never even reaches
+   * this snapshot at all, matching the old pull-based integration's same exclusion).
+   */
+  entity_category: external_exports.enum(["diagnostic", "config"]).nullable().optional()
 });
 var inventorySnapshotSchema = external_exports.object({
   areas: external_exports.array(haAreaSchema),
@@ -18471,7 +18481,7 @@ var config2 = {
    * bundle (e.g. `npm run dev`'s tsx watch), hence the fallback.
    */
   get agentVersion() {
-    return true ? "0.5.1" : "0.0.0-dev";
+    return true ? "0.5.2" : "0.0.0-dev";
   }
 };
 
@@ -18749,18 +18759,26 @@ async function buildInventorySnapshot(socket) {
     socket.listEntities()
   ]);
   const stateByEntityId = new Map(states.map((s) => [s.entity_id, s]));
+  const serviceDeviceIds = new Set(devices.filter((d) => d.entry_type === "service").map((d) => d.id));
+  const physicalDevices = devices.filter((d) => !serviceDeviceIds.has(d.id));
+  const keptEntities = entities.filter((e) => !e.device_id || !serviceDeviceIds.has(e.device_id));
   return {
     areas: areas.map((a) => ({ ha_area_id: a.area_id, name: a.name })),
-    devices: devices.map((d) => ({
+    devices: physicalDevices.map((d) => ({
       ha_device_id: d.id,
       ha_area_id: d.area_id ?? void 0,
       // name_by_user (the customer's own rename, if any) wins over the manufacturer default -
-      // see supervisor-client.ts's listDevices() comment.
-      name: d.name_by_user ?? d.name ?? d.id,
+      // see supervisor-client.ts's listDevices() comment. `||`, deliberately not `??`: some
+      // integrations (Tuya's cloud integration in particular) leave `name` as an empty string
+      // rather than null when they never populated one - `??` only skips null/undefined, so it
+      // was stopping at that empty string instead of falling through to the device id, syncing a
+      // literally blank name. A device name is never legitimately "" as a real value, so treating
+      // any falsy value the same way here is correct, not just a workaround for this one case.
+      name: d.name_by_user || d.name || d.id,
       manufacturer: d.manufacturer ?? void 0,
       model: d.model ?? void 0
     })),
-    entities: entities.map((e) => {
+    entities: keptEntities.map((e) => {
       const state = stateByEntityId.get(e.entity_id);
       return {
         ha_entity_id: e.entity_id,
@@ -18770,7 +18788,8 @@ async function buildInventorySnapshot(socket) {
         friendly_name: typeof state?.attributes.friendly_name === "string" ? state.attributes.friendly_name : void 0,
         state: state?.state ?? null,
         attributes: state?.attributes ?? {},
-        available: state ? state.state !== "unavailable" : false
+        available: state ? state.state !== "unavailable" : false,
+        entity_category: e.entity_category === "diagnostic" || e.entity_category === "config" ? e.entity_category : null
       };
     })
   };
