@@ -1,0 +1,115 @@
+#include <tunables/global>
+
+# Custom AppArmor profile - required for Home Assistant's App security rating to reach 6/6 (the
+# "AppArmor" checkmark: https://developers.home-assistant.io/docs/apps/presentation - a custom
+# apparmor.txt earns +1 over the Supervisor default). Auto-detected by Supervisor purely by this
+# file's presence next to config.yaml - no config.yaml field is needed or added for it.
+#
+# Scoped from actually reading this App's own runtime (rootfs/etc/services.d/*, src/*.ts), not a
+# copy of the generic HA template: the two long-running processes this App ever execs - the Node
+# agent and cloudflared - each get their OWN nested profile, narrower than the outer one, so
+# neither can use permissions that only make sense for the other (most notably: cloudflared can
+# read the outer profile's /data during startup only via the shell that `cat`s the token into its
+# --token argument - the nested cloudflared profile itself has NO /data access at all, since it
+# never opens the credential/token files directly).
+#
+# The base "hemlogik_connect" profile name matches config.yaml's slug field exactly (NOT this
+# directory's name, which has a hyphen) - Supervisor loads/enforces the profile by that slug.
+profile hemlogik_connect flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # Capabilities - matches every current HA App's apparmor.txt template verbatim (developers.home-
+  # assistant.io/docs/apps/presentation); signal(send) is what lets s6 stop/restart the two
+  # services below during shutdown or a config change.
+  file,
+  signal (send) set=(kill,term,int,hup,cont),
+
+  # S6-Overlay - the base image's (ghcr.io/home-assistant/*-base) own init system. Same paths
+  # every App with a custom apparmor.txt needs; not specific to this App's own logic.
+  /init ix,
+  /bin/** ix,
+  /usr/bin/** ix,
+  /run/{s6,s6-rc*,service}/** ix,
+  /package/** ix,
+  /command/** ix,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
+  /etc/cont-finish.d/** rwix,
+  /run/{,**} rwk,
+  /dev/tty rw,
+
+  # Bashio - every service/init script here (rootfs/etc/services.d/*/run, cont-init.d/*.sh) is a
+  # `#!/usr/bin/with-contenv bashio` script.
+  /usr/lib/bashio/** ix,
+  /tmp/** rwk,
+
+  # This App's own persistent storage (connector-credential.json, tunnel-token - see
+  # credential-store.ts, the ONLY place either is ever written on-device). Needed at the OUTER
+  # level too: 01-check-config.sh checks connector-credential.json's existence, and
+  # cloudflared/run's `cat "${TOKEN_FILE}"` reads tunnel-token, both before either nested
+  # process below has even started.
+  /data/** rw,
+
+  # -- Hemlogik Connect agent (Node.js) - rootfs/etc/services.d/agent/run --------------------
+  /usr/bin/node cx -> agent,
+
+  profile agent flags=(attach_disconnected,mediate_deleted) {
+    #include <abstractions/base>
+    #include <abstractions/nameservice>
+
+    # Receives s6's stop/restart signals from the outer profile.
+    signal (receive) peer=*_hemlogik_connect,
+
+    # The node binary and the musl dynamic linker/libc it needs to start at all (Alpine base).
+    /usr/bin/node rm,
+    /lib/ld-musl-*.so* rm,
+    /lib/*.so* rm,
+    /usr/lib/*.so* rm,
+
+    # Its own bundled code (dist/index.js + sourcemap, see esbuild.config.mjs) - read-only,
+    # never written to at runtime.
+    /app/** r,
+
+    # crypto.randomUUID/randomBytes needs the kernel RNG - used directly, and transitively by
+    # the `ws` package for RFC 6455 frame masking on every single outbound WebSocket message
+    # (both the Gateway connection and Supervisor's Core websocket proxy).
+    /dev/urandom r,
+    /dev/null rw,
+
+    # Node/V8/libuv's own runtime introspection - narrowly /proc/self only, never bare /proc.
+    /proc/self/** r,
+
+    # This App's own persistent storage - the connector credential and Cloudflare tunnel token
+    # (credential-store.ts), the only two files this process ever writes anywhere on disk.
+    /data/** rw,
+  }
+
+  # -- cloudflared (Cloudflare Tunnel client) - rootfs/etc/services.d/cloudflared/run -------
+  /usr/bin/cloudflared cx -> cloudflared,
+
+  profile cloudflared flags=(attach_disconnected,mediate_deleted) {
+    #include <abstractions/base>
+    #include <abstractions/nameservice>
+
+    signal (receive) peer=*_hemlogik_connect,
+
+    # The binary and its dynamic linker/libc, if the release build needs either - official
+    # cloudflared Linux release binaries are normally statically linked, but this is a
+    # read-only, low-risk grant kept either way rather than risking a startup failure this
+    # profile has no way to be verified against outside a real HAOS install.
+    /usr/bin/cloudflared rm,
+    /lib/ld-musl-*.so* rm,
+    /lib/*.so* rm,
+    /usr/lib/*.so* rm,
+
+    # Go's runtime reads these for its own bookkeeping (self-introspection, GOMAXPROCS
+    # auto-detection from cgroup limits) - narrow and read-only; cloudflared falls back to
+    # defaults rather than failing to start if either read is denied.
+    /proc/self/** r,
+    /sys/fs/cgroup/** r,
+
+    # Deliberately NO /data access: the tunnel token is read by the OUTER profile's `cat` in
+    # cloudflared/run and handed to this process as an already-resolved `--token` argument -
+    # cloudflared itself never opens the credential/token files from disk.
+  }
+}

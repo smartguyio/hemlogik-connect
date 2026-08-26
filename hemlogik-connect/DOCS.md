@@ -81,6 +81,13 @@ remote access URL. That URL becomes reachable within a minute or two of pairing.
   own supported Supervisor connection instead.
 - Your Supervisor token never leaves this Home Assistant installation.
 
+## Security
+
+Hemlogik Connect ships with its own AppArmor profile, which sandboxes the App's container to
+exactly the files, processes, and permissions it actually needs to run - nothing more. This
+follows Home Assistant's least-privilege guidance and is why the App shows a **6/6 security
+rating** in Home Assistant's Add-on/App store.
+
 ## Troubleshooting
 
 **"Not yet paired" keeps showing in the log.** Double check the connection key was pasted exactly

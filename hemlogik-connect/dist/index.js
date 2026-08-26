@@ -18471,7 +18471,7 @@ var config2 = {
    * bundle (e.g. `npm run dev`'s tsx watch), hence the fallback.
    */
   get agentVersion() {
-    return true ? "0.4.1" : "0.0.0-dev";
+    return true ? "0.5.0" : "0.0.0-dev";
   }
 };
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+Adds a custom AppArmor profile (`apparmor.txt`) - sandboxes the container to exactly what it
+needs to run (the agent's own code and `/data`, cloudflared's binary, both processes' network/DNS
+needs) and nothing else, following Home Assistant's least-privilege guidance. No config.yaml
+changes, no new permissions requested - this should bring the App's security rating to 6/6.
+
 ## 0.4.1
 
 Fix: device names synced from HA's device registry only ever read the manufacturer/integration
