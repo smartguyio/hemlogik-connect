@@ -18471,7 +18471,7 @@ var config2 = {
    * bundle (e.g. `npm run dev`'s tsx watch), hence the fallback.
    */
   get agentVersion() {
-    return true ? "0.4.0" : "0.0.0-dev";
+    return true ? "0.4.1" : "0.0.0-dev";
   }
 };
 
@@ -18623,6 +18623,13 @@ var SupervisorCoreSocket = class {
   async listAreas() {
     return this.send({ type: "config/area_registry/list" });
   }
+  /**
+   * `name` is the manufacturer/integration-supplied default ("Sunricher HK-SL-DIM-A"); when a
+   * user renames a device in HA's UI, that rename lands in `name_by_user`, NOT `name` - HA's own
+   * frontend always prefers name_by_user when it's set, falling back to name otherwise. Missing
+   * this field was a real reported bug: Connect's device list showed the raw manufacturer name
+   * even for devices the customer had explicitly renamed.
+   */
   async listDevices() {
     return this.send({ type: "config/device_registry/list" });
   }
@@ -18747,7 +18754,9 @@ async function buildInventorySnapshot(socket) {
     devices: devices.map((d) => ({
       ha_device_id: d.id,
       ha_area_id: d.area_id ?? void 0,
-      name: d.name ?? d.id,
+      // name_by_user (the customer's own rename, if any) wins over the manufacturer default -
+      // see supervisor-client.ts's listDevices() comment.
+      name: d.name_by_user ?? d.name ?? d.id,
       manufacturer: d.manufacturer ?? void 0,
       model: d.model ?? void 0
     })),

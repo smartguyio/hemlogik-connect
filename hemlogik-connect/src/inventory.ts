@@ -18,7 +18,9 @@ export async function buildInventorySnapshot(socket: SupervisorCoreSocket): Prom
     devices: devices.map((d) => ({
       ha_device_id: d.id,
       ha_area_id: d.area_id ?? undefined,
-      name: d.name ?? d.id,
+      // name_by_user (the customer's own rename, if any) wins over the manufacturer default -
+      // see supervisor-client.ts's listDevices() comment.
+      name: d.name_by_user ?? d.name ?? d.id,
       manufacturer: d.manufacturer ?? undefined,
       model: d.model ?? undefined,
     })),

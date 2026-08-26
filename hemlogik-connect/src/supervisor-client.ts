@@ -150,9 +150,18 @@ export class SupervisorCoreSocket {
     return this.send({ type: "config/area_registry/list" }) as Promise<Array<{ area_id: string; name: string }>>;
   }
 
-  async listDevices(): Promise<Array<{ id: string; area_id: string | null; name: string | null; manufacturer: string | null; model: string | null }>> {
+  /**
+   * `name` is the manufacturer/integration-supplied default ("Sunricher HK-SL-DIM-A"); when a
+   * user renames a device in HA's UI, that rename lands in `name_by_user`, NOT `name` - HA's own
+   * frontend always prefers name_by_user when it's set, falling back to name otherwise. Missing
+   * this field was a real reported bug: Connect's device list showed the raw manufacturer name
+   * even for devices the customer had explicitly renamed.
+   */
+  async listDevices(): Promise<
+    Array<{ id: string; area_id: string | null; name: string | null; name_by_user: string | null; manufacturer: string | null; model: string | null }>
+  > {
     return this.send({ type: "config/device_registry/list" }) as Promise<
-      Array<{ id: string; area_id: string | null; name: string | null; manufacturer: string | null; model: string | null }>
+      Array<{ id: string; area_id: string | null; name: string | null; name_by_user: string | null; manufacturer: string | null; model: string | null }>
     >;
   }
 

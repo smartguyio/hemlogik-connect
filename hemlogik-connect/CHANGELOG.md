@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.1
+
+Fix: device names synced from HA's device registry only ever read the manufacturer/integration
+default `name` field ("Sunricher HK-SL-DIM-A"), never `name_by_user` - the field HA's own frontend
+actually prefers once a customer renames a device. Renamed devices now sync with their real name.
+
 ## 0.4.0
 
 Broadens call_service control: cover (position slider via set_cover_position), fan (speed via
