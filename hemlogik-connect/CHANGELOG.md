@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.6.2
+
+The actual root cause of the "stuck update" reports, found by tracing a real synced payload rather
+than guessing further: the 0.5.2 fix that stops an add-on/integration's own pseudo-device
+(`entry_type: "service"` - Mosquitto, Nginx Proxy Manager, this App itself, etc.) from showing up
+as a fake device card was ALSO silently dropping that pseudo-device's `update.*` entity from every
+sync entirely - not just this App's own update entity, every add-on and HACS-managed update entity
+in the whole installation. 0.6.0's fire-and-forget fix and 0.6.1's self-correction logic were both
+real and both still worth having, but neither ever got the chance to run, since the entity was
+being filtered out before either could see it. `update.*` entities are now kept regardless of which
+device they're nominally attached to - dropping the pseudo-device itself (so it still never
+becomes a device card) already keeps this from reintroducing device-card noise.
+
 ## 0.6.1
 
 Fix, confirmed live: even after this App had already restarted running a new version, Home

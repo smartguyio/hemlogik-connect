@@ -18490,7 +18490,7 @@ var config2 = {
    * bundle (e.g. `npm run dev`'s tsx watch), hence the fallback.
    */
   get agentVersion() {
-    return true ? "0.6.1" : "0.0.0-dev";
+    return true ? "0.6.2" : "0.0.0-dev";
   }
 };
 
@@ -18782,7 +18782,9 @@ async function buildInventorySnapshot(socket) {
   const stateByEntityId = new Map(states.map((s) => [s.entity_id, s]));
   const serviceDeviceIds = new Set(devices.filter((d) => d.entry_type === "service").map((d) => d.id));
   const physicalDevices = devices.filter((d) => !serviceDeviceIds.has(d.id));
-  const keptEntities = entities.filter((e) => !e.device_id || !serviceDeviceIds.has(e.device_id));
+  const keptEntities = entities.filter(
+    (e) => !e.device_id || !serviceDeviceIds.has(e.device_id) || e.entity_id.startsWith("update.")
+  );
   return {
     areas: areas.map((a) => ({ ha_area_id: a.area_id, name: a.name })),
     devices: physicalDevices.map((d) => ({

@@ -60,11 +60,22 @@ export async function buildInventorySnapshot(socket: SupervisorCoreSocket): Prom
 
   // "service" devices are an integration/hub's own logical pseudo-device (an HA add-on's own
   // diagnostics device, an MQTT broker's own device, etc.) - never a physical device a technician
-  // would want to see as a card. Drop them, and drop their entities too (rather than letting them
-  // become "unassigned" noise), matching the old pull-based integration's own exclusion exactly.
+  // would want to see as a card. Drop them, matching the old pull-based integration's own
+  // exclusion exactly - but NOT their update.* entities: confirmed live, this was silently
+  // dropping every add-on/HACS update entity's ongoing sync entirely (Hemlogik Connect's own
+  // included - the actual root cause behind a real "stuck update" report, not the earlier fixes
+  // in this area, which were all real but never even got the chance to run since this filter
+  // removed the entity before they'd ever see it). An add-on's own pseudo-device should never
+  // become a device card, but its update entity is exactly what the Updates tab exists for -
+  // dropping the device (below) already keeps it from ever being offered as a card;
+  // Gateway's applyInventorySnapshot already null-safes an entity's device_id that isn't in the
+  // synced device set, so this entity simply becomes "unassigned" rather than needing any extra
+  // handling here.
   const serviceDeviceIds = new Set(devices.filter((d) => d.entry_type === "service").map((d) => d.id));
   const physicalDevices = devices.filter((d) => !serviceDeviceIds.has(d.id));
-  const keptEntities = entities.filter((e) => !e.device_id || !serviceDeviceIds.has(e.device_id));
+  const keptEntities = entities.filter(
+    (e) => !e.device_id || !serviceDeviceIds.has(e.device_id) || e.entity_id.startsWith("update.")
+  );
 
   return {
     areas: areas.map((a) => ({ ha_area_id: a.area_id, name: a.name })),
