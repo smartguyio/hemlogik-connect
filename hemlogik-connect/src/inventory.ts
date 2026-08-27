@@ -6,6 +6,35 @@ import { config } from "./config";
 const EMPTY_SNAPSHOT: InventorySnapshot = { areas: [], devices: [], entities: [] };
 
 /**
+ * HA's own update entity for THIS add-on (title "Hemlogik Connect" - locale-independent, unlike
+ * its entity_id, which gets a language-dependent suffix: confirmed live as
+ * "update.hemlogik_connect_uppdatering" on a Swedish-locale instance, would be
+ * "update.hemlogik_connect_update" on an English one) can lag behind an actual restart -
+ * confirmed live: after this agent had already restarted running 0.6.0, Supervisor's own
+ * bookkeeping for the add-on's update entity still reported installed_version 0.5.1, and kept
+ * reporting it - no amount of re-fetching from us surfaces anything different, since HA/Supervisor
+ * itself hadn't updated what it believes yet. We know our own version for certain (it's literally
+ * the code executing right now), so correct the obviously-stale reading before it's ever synced
+ * upstream, rather than faithfully relaying data we know is wrong. Only ever touches this one
+ * entity (matched by title, not guessed at for anything else) - every other update entity's data
+ * is passed through completely untouched.
+ */
+function correctOwnUpdateEntity(
+  domain: string,
+  entityState: string | null,
+  attributes: Record<string, unknown>
+): { entityState: string | null; attributes: Record<string, unknown> } {
+  if (domain !== "update" || attributes.title !== "Hemlogik Connect" || attributes.installed_version === config.agentVersion) {
+    return { entityState, attributes };
+  }
+
+  const corrected: Record<string, unknown> = { ...attributes, installed_version: config.agentVersion };
+  const latestVersion = corrected.latest_version;
+  const stillNeedsUpdate = typeof latestVersion !== "string" || latestVersion !== config.agentVersion;
+  return { entityState: stillNeedsUpdate ? entityState : "off", attributes: corrected };
+}
+
+/**
  * Builds a full inventory snapshot (areas -> devices -> entities, respecting HA's real model) for
  * the `refresh_inventory` command result - see ha_areas/ha_devices/ha_entities in the main repo's
  * 0051_connect_ha_inventory.sql for how this gets stored. Always a full resync, never a delta.
@@ -55,14 +84,16 @@ export async function buildInventorySnapshot(socket: SupervisorCoreSocket): Prom
     })),
     entities: keptEntities.map((e) => {
       const state = stateByEntityId.get(e.entity_id);
+      const domain = e.entity_id.split(".")[0] ?? "unknown";
+      const { entityState, attributes } = correctOwnUpdateEntity(domain, state?.state ?? null, state?.attributes ?? {});
       return {
         ha_entity_id: e.entity_id,
         ha_device_id: e.device_id ?? undefined,
         ha_area_id: e.area_id ?? undefined,
-        domain: e.entity_id.split(".")[0] ?? "unknown",
+        domain,
         friendly_name: typeof state?.attributes.friendly_name === "string" ? state.attributes.friendly_name : undefined,
-        state: state?.state ?? null,
-        attributes: state?.attributes ?? {},
+        state: entityState,
+        attributes,
         available: state ? state.state !== "unavailable" : false,
         entity_category: e.entity_category === "diagnostic" || e.entity_category === "config" ? e.entity_category : null,
       };

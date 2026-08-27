@@ -4,7 +4,7 @@
 # Connect architecture plan for the exact fields checked.
 
 name: Hemlogik Connect
-version: "0.6.0"
+version: "0.6.1"
 slug: hemlogik_connect
 description: "Connects Home Assistant securely to Hemlogik for remote access, monitoring and management."
 url: "https://github.com/smartguyio/Hemlogik/tree/master/ha-app/hemlogik-connect"

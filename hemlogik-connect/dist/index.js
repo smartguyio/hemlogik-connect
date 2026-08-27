@@ -18490,7 +18490,7 @@ var config2 = {
    * bundle (e.g. `npm run dev`'s tsx watch), hence the fallback.
    */
   get agentVersion() {
-    return true ? "0.6.0" : "0.0.0-dev";
+    return true ? "0.6.1" : "0.0.0-dev";
   }
 };
 
@@ -18762,6 +18762,15 @@ async function listAutomationTraces(socket, configId) {
 
 // src/inventory.ts
 var EMPTY_SNAPSHOT = { areas: [], devices: [], entities: [] };
+function correctOwnUpdateEntity(domain2, entityState, attributes) {
+  if (domain2 !== "update" || attributes.title !== "Hemlogik Connect" || attributes.installed_version === config2.agentVersion) {
+    return { entityState, attributes };
+  }
+  const corrected = { ...attributes, installed_version: config2.agentVersion };
+  const latestVersion = corrected.latest_version;
+  const stillNeedsUpdate = typeof latestVersion !== "string" || latestVersion !== config2.agentVersion;
+  return { entityState: stillNeedsUpdate ? entityState : "off", attributes: corrected };
+}
 async function buildInventorySnapshot(socket) {
   if (!config2.enableDeviceSync) return EMPTY_SNAPSHOT;
   const [states, areas, devices, entities] = await Promise.all([
@@ -18792,14 +18801,16 @@ async function buildInventorySnapshot(socket) {
     })),
     entities: keptEntities.map((e) => {
       const state = stateByEntityId.get(e.entity_id);
+      const domain2 = e.entity_id.split(".")[0] ?? "unknown";
+      const { entityState, attributes } = correctOwnUpdateEntity(domain2, state?.state ?? null, state?.attributes ?? {});
       return {
         ha_entity_id: e.entity_id,
         ha_device_id: e.device_id ?? void 0,
         ha_area_id: e.area_id ?? void 0,
-        domain: e.entity_id.split(".")[0] ?? "unknown",
+        domain: domain2,
         friendly_name: typeof state?.attributes.friendly_name === "string" ? state.attributes.friendly_name : void 0,
-        state: state?.state ?? null,
-        attributes: state?.attributes ?? {},
+        state: entityState,
+        attributes,
         available: state ? state.state !== "unavailable" : false,
         entity_category: e.entity_category === "diagnostic" || e.entity_category === "config" ? e.entity_category : null
       };

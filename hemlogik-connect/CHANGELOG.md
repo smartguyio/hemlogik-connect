@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.1
+
+Fix, confirmed live: even after this App had already restarted running a new version, Home
+Assistant's own update entity for it (`update.hemlogik_connect_uppdatering` on a Swedish-locale
+instance) kept reporting the *previous* `installed_version` - Supervisor's own bookkeeping for an
+add-on's update entity can lag behind the add-on actually having restarted, and no amount of
+re-syncing from this App's side changes what Supervisor itself is still telling Home Assistant.
+This App now corrects that one entity's `installed_version` (and, if that means it's fully caught
+up, its "update available" state) using its own definitely-known running version before ever
+syncing it to the portal, rather than faithfully relaying a reading it can tell is stale.
+
 ## 0.6.0
 
 - New option: **Sync devices, entities and automations** (`enable_device_sync`, on by default -
