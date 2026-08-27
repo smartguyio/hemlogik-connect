@@ -1,9 +1,25 @@
 import type { InventorySnapshot } from "@hemlogik/connect-protocol";
 import { getStates } from "./supervisor-client";
 import type { SupervisorCoreSocket } from "./supervisor-client";
+import { config } from "./config";
 
-/** Builds a full inventory snapshot (areas -> devices -> entities, respecting HA's real model) for the `refresh_inventory` command result - see ha_areas/ha_devices/ha_entities in the main repo's 0051_connect_ha_inventory.sql for how this gets stored. Always a full resync, never a delta. */
+const EMPTY_SNAPSHOT: InventorySnapshot = { areas: [], devices: [], entities: [] };
+
+/**
+ * Builds a full inventory snapshot (areas -> devices -> entities, respecting HA's real model) for
+ * the `refresh_inventory` command result - see ha_areas/ha_devices/ha_entities in the main repo's
+ * 0051_connect_ha_inventory.sql for how this gets stored. Always a full resync, never a delta.
+ *
+ * The single point of truth for remote-access-only mode (config.enableDeviceSync === false) -
+ * both index.ts's periodic resync() and commands.ts's on-demand refresh_inventory command already
+ * funnel through this one function, so gating it here covers both without duplicating the check.
+ * Returns empty rather than throwing so a connector that's ALREADY synced devices and then gets
+ * switched to remote-access-only correctly clears out to empty on its very next resync, instead of
+ * leaving stale device data cached forever.
+ */
 export async function buildInventorySnapshot(socket: SupervisorCoreSocket): Promise<InventorySnapshot> {
+  if (!config.enableDeviceSync) return EMPTY_SNAPSHOT;
+
   const [states, areas, devices, entities] = await Promise.all([
     getStates(),
     socket.listAreas(),

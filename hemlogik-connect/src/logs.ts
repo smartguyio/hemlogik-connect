@@ -1,6 +1,7 @@
 import type { LogEntry, LogLevel } from "@hemlogik/connect-protocol";
 import { LOG_LEVELS } from "@hemlogik/connect-protocol";
 import type { HaSystemLogEntry, SupervisorCoreSocket } from "./supervisor-client";
+import { config } from "./config";
 
 /**
  * Straight port of integrations/home-assistant/logs.server.ts's toLogEntry() in the main portal
@@ -32,8 +33,13 @@ function toLogEntry(entry: HaSystemLogEntry): LogEntry {
  * this ever captures them. Known, permanent limitation (documented in the architecture doc),
  * mitigated but not eliminated by pushing this on a cadence (see index.ts's periodic resync)
  * rather than only ever fetching on demand.
+ *
+ * Same remote-access-only gate as inventory.ts's buildInventorySnapshot - covers both the periodic
+ * pushLogs() push and the on-demand get_logs command from this one place.
  */
 export async function listLogs(socket: SupervisorCoreSocket): Promise<LogEntry[]> {
+  if (!config.enableDeviceSync) return [];
+
   const raw = await socket.listRawSystemLog();
   return [...raw].sort((a, b) => b.timestamp - a.timestamp).map(toLogEntry);
 }

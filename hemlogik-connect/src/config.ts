@@ -22,6 +22,15 @@ export const config = {
   get enrollmentKey(): string {
     return process.env.ENROLLMENT_KEY ?? "";
   },
+  /**
+   * Remote-access-only mode when false - see config.yaml's enable_device_sync doc comment.
+   * Defaults to true (bashio's own default plus this fallback both agree) so a container started
+   * without the env var at all - e.g. `npm run dev`'s tsx watch, which never runs rootfs/etc/
+   * services.d/agent/run - behaves like every existing install, not a fresh remote-access-only one.
+   */
+  get enableDeviceSync(): boolean {
+    return process.env.ENABLE_DEVICE_SYNC !== "false";
+  },
   get dataDir(): string {
     return process.env.DATA_DIR ?? "/data";
   },

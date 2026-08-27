@@ -7,6 +7,7 @@
 bashio::log.info "Starting Hemlogik Connect agent..."
 export LOG_LEVEL="$(bashio::config 'log_level' 'info')"
 export ENROLLMENT_KEY="$(bashio::config 'enrollment_key' '')"
+export ENABLE_DEVICE_SYNC="$(bashio::config 'enable_device_sync' 'true')"
 export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
 
 exec node /app/dist/index.js

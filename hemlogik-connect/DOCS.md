@@ -48,6 +48,15 @@ log_level: "info"
 
 Leave this alone unless Hemlogik support asks you to change it for troubleshooting.
 
+```yaml
+enable_device_sync: true
+```
+
+On by default. Turn this off if you only want **remote access** through Hemlogik - your Cloudflare
+tunnel and connection to Hemlogik keep working exactly the same, but nothing about your home
+(devices, entities, automations, logs) is ever synced or visible in the Hemlogik portal. Ask your
+Hemlogik installer if you're unsure which tier applies to you.
+
 **You do not need to create a Home Assistant Long-Lived Access Token, configure Cloudflare
 yourself, or edit any files** - the only extra step at all is the small Trusted proxies setting in
 step 4 above, which every reverse-proxy-based remote access setup for Home Assistant requires

@@ -18470,6 +18470,15 @@ var config2 = {
   get enrollmentKey() {
     return process.env.ENROLLMENT_KEY ?? "";
   },
+  /**
+   * Remote-access-only mode when false - see config.yaml's enable_device_sync doc comment.
+   * Defaults to true (bashio's own default plus this fallback both agree) so a container started
+   * without the env var at all - e.g. `npm run dev`'s tsx watch, which never runs rootfs/etc/
+   * services.d/agent/run - behaves like every existing install, not a fresh remote-access-only one.
+   */
+  get enableDeviceSync() {
+    return process.env.ENABLE_DEVICE_SYNC !== "false";
+  },
   get dataDir() {
     return process.env.DATA_DIR ?? "/data";
   },
@@ -18481,7 +18490,7 @@ var config2 = {
    * bundle (e.g. `npm run dev`'s tsx watch), hence the fallback.
    */
   get agentVersion() {
-    return true ? "0.5.2" : "0.0.0-dev";
+    return true ? "0.6.0" : "0.0.0-dev";
   }
 };
 
@@ -18728,6 +18737,7 @@ ${entry.exception}` : messageText;
   };
 }
 async function listLogs(socket) {
+  if (!config2.enableDeviceSync) return [];
   const raw = await socket.listRawSystemLog();
   return [...raw].sort((a, b) => b.timestamp - a.timestamp).map(toLogEntry);
 }
@@ -18751,7 +18761,9 @@ async function listAutomationTraces(socket, configId) {
 }
 
 // src/inventory.ts
+var EMPTY_SNAPSHOT = { areas: [], devices: [], entities: [] };
 async function buildInventorySnapshot(socket) {
+  if (!config2.enableDeviceSync) return EMPTY_SNAPSHOT;
   const [states, areas, devices, entities] = await Promise.all([
     getStates(),
     socket.listAreas(),
@@ -18796,12 +18808,22 @@ async function buildInventorySnapshot(socket) {
 }
 
 // src/commands.ts
+var DEVICE_SYNC_COMMANDS = /* @__PURE__ */ new Set([
+  "call_service",
+  "get_state",
+  "get_automation_config",
+  "set_automation_config",
+  "get_automation_traces"
+]);
 async function executeCommand(command, rawPayload, socket) {
   let payload;
   try {
     payload = parseCommandPayload(command, rawPayload);
   } catch {
     return { ok: false, errorCode: "invalid_payload", errorMessage: "Payload failed schema validation" };
+  }
+  if (!config2.enableDeviceSync && DEVICE_SYNC_COMMANDS.has(command)) {
+    return { ok: false, errorCode: "device_sync_disabled", errorMessage: "Device/entity sync is disabled on this installation (remote access only)." };
   }
   try {
     switch (command) {
@@ -18836,6 +18858,10 @@ async function executeCommand(command, rawPayload, socket) {
       }
       case "call_service": {
         const { domain: domain2, service, entityId, data } = payload;
+        if (domain2 === "update" && service === "install") {
+          callService(domain2, service, entityId, data).catch((err) => logger.warning(`update.install request errored (may be expected if it restarted something): ${err instanceof Error ? err.message : String(err)}`));
+          return { ok: true };
+        }
         await callService(domain2, service, entityId, data);
         return { ok: true };
       }
@@ -18979,6 +19005,7 @@ function shouldForwardStateEvent(entityId, knownEntityIds) {
 
 // src/index.ts
 var SELF_HEAL_INTERVAL_MS = 30 * 60 * 1e3;
+var SETTLE_RESYNC_DELAY_MS = 90 * 1e3;
 var RETRY_DELAY_MS = 5e3;
 async function main() {
   logger.info(`Hemlogik Connect agent starting (version ${config2.agentVersion})`);
@@ -19006,6 +19033,7 @@ async function main() {
     }
   }
   await resync();
+  setTimeout(resync, SETTLE_RESYNC_DELAY_MS);
   setInterval(resync, SELF_HEAL_INTERVAL_MS);
   async function pushLogs() {
     try {
@@ -19018,15 +19046,17 @@ async function main() {
   }
   await pushLogs();
   setInterval(pushLogs, SELF_HEAL_INTERVAL_MS);
-  await socket.subscribeStateChanged((event) => {
-    if (!event.new_state || !shouldForwardStateEvent(event.entity_id, knownEntityIds)) return;
-    gateway.sendStateEvent({
-      ha_entity_id: event.entity_id,
-      state: event.new_state.state,
-      attributes: event.new_state.attributes,
-      last_changed: event.new_state.last_changed
+  if (config2.enableDeviceSync) {
+    await socket.subscribeStateChanged((event) => {
+      if (!event.new_state || !shouldForwardStateEvent(event.entity_id, knownEntityIds)) return;
+      gateway.sendStateEvent({
+        ha_entity_id: event.entity_id,
+        state: event.new_state.state,
+        attributes: event.new_state.attributes,
+        last_changed: event.new_state.last_changed
+      });
     });
-  });
+  }
   logger.info("Hemlogik Connect agent is running.");
 }
 async function retryUntilSuccess(fn, label) {

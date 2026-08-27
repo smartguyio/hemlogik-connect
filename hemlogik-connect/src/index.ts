@@ -10,6 +10,7 @@ import { listLogs } from "./logs";
 import { shouldForwardStateEvent } from "./events";
 
 const SELF_HEAL_INTERVAL_MS = 30 * 60 * 1000; // AGENTS spec s17/s22 - periodic resync without being told to, on top of on-demand refresh_inventory
+const SETTLE_RESYNC_DELAY_MS = 90 * 1000; // one extra startup-only resync - see its call site below
 const RETRY_DELAY_MS = 5000;
 
 async function main(): Promise<void> {
@@ -45,6 +46,13 @@ async function main(): Promise<void> {
   }
 
   await resync();
+  // One extra "settle" resync shortly after startup, on top of the immediate one above and the
+  // regular SELF_HEAL_INTERVAL_MS cadence below - specifically for right after this agent's own
+  // update just installed (see commands.ts's call_service fire-and-forget handling for
+  // update.install): Supervisor's own update-entity bookkeeping can still be catching up at the
+  // exact moment the fresh agent's first resync fires, and this catches that without making every
+  // other, unrelated startup wait up to SELF_HEAL_INTERVAL_MS (30 min) for it to self-correct.
+  setTimeout(resync, SETTLE_RESYNC_DELAY_MS);
   setInterval(resync, SELF_HEAL_INTERVAL_MS);
 
   /**
@@ -67,15 +75,20 @@ async function main(): Promise<void> {
   await pushLogs();
   setInterval(pushLogs, SELF_HEAL_INTERVAL_MS);
 
-  await socket.subscribeStateChanged((event) => {
-    if (!event.new_state || !shouldForwardStateEvent(event.entity_id, knownEntityIds)) return;
-    gateway.sendStateEvent({
-      ha_entity_id: event.entity_id,
-      state: event.new_state.state,
-      attributes: event.new_state.attributes,
-      last_changed: event.new_state.last_changed,
+  // Remote-access-only mode: knownEntityIds is always empty (buildInventorySnapshot short-
+  // circuits, see inventory.ts), so shouldForwardStateEvent would never forward anything anyway -
+  // skip the subscription itself rather than run it as a permanent no-op.
+  if (config.enableDeviceSync) {
+    await socket.subscribeStateChanged((event) => {
+      if (!event.new_state || !shouldForwardStateEvent(event.entity_id, knownEntityIds)) return;
+      gateway.sendStateEvent({
+        ha_entity_id: event.entity_id,
+        state: event.new_state.state,
+        attributes: event.new_state.attributes,
+        last_changed: event.new_state.last_changed,
+      });
     });
-  });
+  }
 
   logger.info("Hemlogik Connect agent is running.");
 }

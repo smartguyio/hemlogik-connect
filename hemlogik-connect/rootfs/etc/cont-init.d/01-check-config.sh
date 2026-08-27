@@ -13,3 +13,9 @@ else
     bashio::log.info "Hemlogik Connect: not yet paired - will submit the configured connection key on startup."
   fi
 fi
+
+if bashio::config.true 'enable_device_sync'; then
+  bashio::log.info "Hemlogik Connect: device/entity/automation sync is ON."
+else
+  bashio::log.info "Hemlogik Connect: device/entity/automation sync is OFF - remote access only."
+fi

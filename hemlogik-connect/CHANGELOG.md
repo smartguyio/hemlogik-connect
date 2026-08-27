@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.0
+
+- New option: **Sync devices, entities and automations** (`enable_device_sync`, on by default -
+  nothing changes for an existing install). Turn it off to run this App as remote access only -
+  the Cloudflare tunnel and connection to Hemlogik keep working exactly the same, but nothing about
+  the home itself (devices, entities, automations, logs) ever leaves this device. Lets an
+  installation be sold/onboarded as remote-access-only with a real, enforced boundary.
+- Fixed a stuck-looking update: installing an update to this App itself (or anything else that
+  restarts something mid-request) could never confirm its own completion back to the portal, since
+  the request's responder is the process being replaced - the portal now finds out the update
+  actually finished via an extra resync ~90 seconds after this App starts back up, on top of the
+  existing "on connect + every 30 minutes" resync, plus a manual "Uppdatera nu" refresh button in
+  the portal's Updates tab for checking immediately instead of waiting.
+
 ## 0.5.2
 
 Two device-sync fixes reported live:

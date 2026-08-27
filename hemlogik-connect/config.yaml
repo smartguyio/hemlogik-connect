@@ -4,7 +4,7 @@
 # Connect architecture plan for the exact fields checked.
 
 name: Hemlogik Connect
-version: "0.5.2"
+version: "0.6.0"
 slug: hemlogik_connect
 description: "Connects Home Assistant securely to Hemlogik for remote access, monitoring and management."
 url: "https://github.com/smartguyio/Hemlogik/tree/master/ha-app/hemlogik-connect"
@@ -39,14 +39,22 @@ hassio_role: default
 map:
   - data:rw
 
-# Deliberately minimal - only the connection key an installer pastes in, plus an optional advanced
-# log level. No Cloudflare terminology, no infra settings, no HA token field (AGENTS spec s10/s48).
+# Deliberately minimal - only the connection key an installer pastes in, an optional advanced log
+# level, and the remote-access-only toggle below. No Cloudflare terminology, no infra settings, no
+# HA token field (AGENTS spec s10/s48).
 options:
   enrollment_key: ""
   log_level: "info"
+  # Default true - every existing install keeps syncing exactly as before until someone explicitly
+  # turns this off. Off means remote access (this App's whole reason to exist) keeps working
+  # exactly the same, but nothing about the home itself - devices, entities, automations, logs -
+  # ever leaves this device. Lets Hemlogik sell/onboard a "remote access only" tier with a real,
+  # enforced boundary rather than just a portal-side promise not to look.
+  enable_device_sync: true
 schema:
   enrollment_key: "str?"
   log_level: "list(debug|info|warning|error)?"
+  enable_device_sync: "bool?"
 
 # No `image:` field, deliberately: that would tell Supervisor to PULL a prebuilt image from a
 # registry instead of building it. Until a CI workflow exists to publish
