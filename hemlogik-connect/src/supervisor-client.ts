@@ -96,44 +96,86 @@ export async function setAutomationConfig(configId: string, newConfig: Record<st
  * `ws` package here (a real Node.js process, unlike that Cloudflare Workers client - see its own
  * comment for why `ws` specifically doesn't work there but is the right choice here).
  */
+const MAX_RECONNECT_DELAY_MS = 60_000;
+
 export class SupervisorCoreSocket {
   private ws: WebSocket | null = null;
   private nextId = 1;
   private pending = new Map<number, { resolve: (result: unknown) => void; reject: (err: Error) => void }>();
   private eventHandlers = new Set<(event: { entity_id: string; new_state: HaState | null }) => void>();
+  private reconnectDelayMs = 1000;
+  /** Set by close() - stops the reconnect loop below from firing after an intentional shutdown
+   * (close() isn't called anywhere in this codebase today, SIGTERM just exits the whole process
+   * directly, but a "close() means stay closed" guard is basic hygiene for whenever that changes). */
+  private closing = false;
 
-  async connect(): Promise<void> {
-    const wsUrl = `${config.supervisorBaseUrl.replace(/^http/, "ws")}/core/websocket`;
-    await new Promise<void>((resolve, reject) => {
-      const ws = new WebSocket(wsUrl);
-      this.ws = ws;
+  /**
+   * Resolves once the FIRST connection opens (matches GatewayClient.connect's own convention, see
+   * its comment) - callers that need to send something right after startup must await this.
+   * Automatic reconnects after a later disconnect do NOT re-resolve/reject this same promise;
+   * before this, a dropped Supervisor connection was never retried at all - every resync() from
+   * then on (the 90s startup settle, and every SELF_HEAL_INTERVAL_MS after) failed forever with
+   * "Supervisor Core WebSocket is not connected" until the whole agent process was restarted. Real
+   * production symptom, not hypothetical: Home Assistant Core itself restarting (an update, a
+   * config reload) drops this connection independently of the agent's own lifecycle or its
+   * separate connection to Hemlogik Cloud.
+   */
+  connect(): Promise<void> {
+    return new Promise((resolveFirstConnect, rejectFirstConnect) => {
+      const attempt = (isFirstAttempt: boolean) => {
+        const wsUrl = `${config.supervisorBaseUrl.replace(/^http/, "ws")}/core/websocket`;
+        const ws = new WebSocket(wsUrl);
+        this.ws = ws;
 
-      ws.on("message", (raw) => {
-        const msg = JSON.parse(raw.toString()) as Record<string, unknown>;
-        if (msg.type === "auth_required") {
-          ws.send(JSON.stringify({ type: "auth", access_token: config.supervisorToken }));
-        } else if (msg.type === "auth_ok") {
-          resolve();
-        } else if (msg.type === "auth_invalid") {
-          reject(new Error("Supervisor Core WebSocket auth failed"));
-        } else if (msg.type === "result" && typeof msg.id === "number") {
-          const pending = this.pending.get(msg.id);
-          if (!pending) return;
-          this.pending.delete(msg.id);
-          if (msg.success) pending.resolve(msg.result);
-          else pending.reject(new Error(JSON.stringify(msg.error)));
-        } else if (msg.type === "event" && typeof msg.id === "number") {
-          const event = (msg.event as Record<string, unknown>)?.data as { entity_id: string; new_state: HaState | null } | undefined;
-          if (event) for (const handler of this.eventHandlers) handler(event);
-        }
-      });
-      ws.on("error", (err) => {
-        logger.error("Supervisor Core WebSocket error", err);
-        reject(err);
-      });
-      ws.on("close", () => {
-        this.ws = null;
-      });
+        ws.on("message", (raw) => {
+          const msg = JSON.parse(raw.toString()) as Record<string, unknown>;
+          if (msg.type === "auth_required") {
+            ws.send(JSON.stringify({ type: "auth", access_token: config.supervisorToken }));
+          } else if (msg.type === "auth_ok") {
+            this.reconnectDelayMs = 1000;
+            if (isFirstAttempt) {
+              resolveFirstConnect();
+            } else if (this.eventHandlers.size > 0) {
+              // A fresh WebSocket connection carries none of the previous one's subscriptions -
+              // re-issue it so state-change forwarding (events.ts) doesn't silently go quiet after
+              // a reconnect the same way inventory resync used to.
+              void this.send({ type: "subscribe_events", event_type: "state_changed" }).catch((err) =>
+                logger.error("Failed to resubscribe to state_changed after Supervisor reconnect", err)
+              );
+            }
+          } else if (msg.type === "auth_invalid") {
+            const err = new Error("Supervisor Core WebSocket auth failed");
+            if (isFirstAttempt) rejectFirstConnect(err);
+            else logger.error("Supervisor Core WebSocket auth failed on reconnect", err);
+          } else if (msg.type === "result" && typeof msg.id === "number") {
+            const pending = this.pending.get(msg.id);
+            if (!pending) return;
+            this.pending.delete(msg.id);
+            if (msg.success) pending.resolve(msg.result);
+            else pending.reject(new Error(JSON.stringify(msg.error)));
+          } else if (msg.type === "event" && typeof msg.id === "number") {
+            const event = (msg.event as Record<string, unknown>)?.data as { entity_id: string; new_state: HaState | null } | undefined;
+            if (event) for (const handler of this.eventHandlers) handler(event);
+          }
+        });
+        ws.on("error", (err) => {
+          logger.error("Supervisor Core WebSocket error", err);
+          if (isFirstAttempt) rejectFirstConnect(err);
+        });
+        ws.on("close", () => {
+          this.ws = null;
+          // Never leave a caller awaiting a response that can now never arrive - resync() and
+          // friends already tolerate a rejected send() (they're wrapped in try/catch), but without
+          // this they'd hang indefinitely instead.
+          for (const { reject } of this.pending.values()) reject(new Error("Supervisor Core WebSocket disconnected"));
+          this.pending.clear();
+          if (this.closing) return;
+          logger.warning(`Disconnected from Supervisor Core WebSocket - reconnecting in ${this.reconnectDelayMs}ms`);
+          setTimeout(() => attempt(false), this.reconnectDelayMs);
+          this.reconnectDelayMs = Math.min(this.reconnectDelayMs * 2, MAX_RECONNECT_DELAY_MS);
+        });
+      };
+      attempt(true);
     });
   }
 
@@ -221,6 +263,7 @@ export class SupervisorCoreSocket {
   }
 
   close(): void {
+    this.closing = true;
     this.ws?.close();
     this.ws = null;
   }
