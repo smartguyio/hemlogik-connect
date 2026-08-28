@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.3
+
+Fixed: this App's connection to Home Assistant Core itself (separate from its connection to
+Hemlogik Cloud) never reconnected once it dropped - something as ordinary as Home Assistant Core
+restarting for an update or a config reload was enough to trigger it. From that point on, every
+inventory sync failed silently until this App itself was restarted, meaning devices/entities could
+go stale in the portal for an arbitrarily long time with no visible error. Now reconnects
+automatically, the same way the Hemlogik Cloud connection already did.
+
 ## 0.6.2
 
 The actual root cause of the "stuck update" reports, found by tracing a real synced payload rather
